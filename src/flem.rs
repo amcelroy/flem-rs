@@ -1,5 +1,4 @@
-use serde::{Serialize, Deserialize};
-use bincode;
+use core;
 
 pub struct Flem{
     flem_id: FlemDataId,
@@ -24,7 +23,7 @@ pub struct FlemAddByte {
     info: u16,
 }
 
-#[derive(Serialize, Deserialize)]
+#[repr(C, packed)]
 pub struct FlemPacket {
     checksum: u16,
     device_cmd: u32,
@@ -180,16 +179,38 @@ impl FlemPacket {
        return retval;
     }
 
-    fn toVecU8(&self) -> Vec<u8> {
-        return bincode::serialize(&self).unwrap();
+    pub fn setCommand(&mut self, command: u32) {
+        self.device_cmd = command;
     }
 
-    pub fn checksum(&mut self) -> u16 {
-        let cs: u16 = 0;
-   
-         
+    pub fn setStatus(&mut self, status: u16) {
+        self.device_status = status;
+    }
 
-        return cs;
+    pub fn asU8Array(&self) -> &[u8] {
+        let stream: &[u8] = unsafe {  
+            ::core::slice::from_raw_parts(
+                (self as *const FlemPacket) as *const u8, 
+                self.length() as usize
+            )
+        };
+
+        return stream;
+    }
+
+    pub fn checksum(&self) -> u16 {
+        let crc: u16 = 0;
+        let bytes: &[u8] = self.asU8Array();
+        let mut psize: u16 = bytes.len() as u16;
+        
+        while psize > 0 {
+                    
+    
+
+            psize -= 1;
+        }
+
+        return crc;
     }
 
     pub fn reset(&mut self) {
