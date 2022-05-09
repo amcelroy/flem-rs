@@ -1,5 +1,3 @@
-use core;
-
 pub struct Flem{
     flem_id: FlemDataId,
 }
@@ -12,6 +10,45 @@ pub struct FlemDataId {
     name: [char; 30],
     firmware: [char; 30],
     functions: [u32; 10],
+}
+
+impl FlemDataId {
+    pub fn new(name: &str, firmware: &str, functions: &[u32]) -> Result<Self, &'static str> {
+        let mut id = FlemDataId {
+            name: ['\0'; 30],
+            firmware: ['\0'; 30],
+            functions: [0; 10],
+        };
+
+        if name.len() > 30 {
+            return Err("Error: name should be 30 chars or less");
+        }else{
+            for a in 0..name.len() {
+                let x = a as usize;
+                id.name[x] = name.as_bytes()[x] as char;
+            }
+        }
+
+        if firmware.len() > 30 {
+            return Err("Error: firmware should be 30 chars or less");
+        }else{
+            for a in 0..firmware.len() {
+                let x = a as usize;
+                id.firmware[x] == firmware.as_bytes()[x] as char;
+            }
+        }
+
+        if functions.len() > 10 {
+            return Err("Error: functions should be 10 elements or less");
+        }else{
+            for a in 0..functions.len() {
+               id.functions[a] = functions[a]; 
+            }
+        }
+
+        Ok(id)
+    }
+    
 }
 
 pub struct FlemGetByte {
@@ -31,16 +68,17 @@ pub struct FlemPacket {
     length: u16,
     data: [u8; FlemPacket::FLEM_MAX_DATA_SIZE as usize],
     internal_counter: u32,
+    length_counter: usize,
 }
 
-pub type FlemValid = fn(i: FlemInterface, p: &mut FlemPacket);
+pub type FlemValid = fn(i: &FlemInterface, p: &mut FlemPacket);
 
-pub type FlemError = fn(i: FlemInterface, p: &mut FlemPacket, status: u16);
+pub type FlemError = fn(i: &FlemInterface, p: &mut FlemPacket, status: u16);
 
 pub struct FlemInterface {
-    id: FlemDataId,
-    valid_handler: FlemValid,
-    error_handler: FlemError,
+    pub id: FlemDataId,
+    pub valid_handler: FlemValid,
+    pub error_handler: FlemError,
 }
 
 impl FlemStatus {
@@ -149,6 +187,7 @@ impl FlemPacket {
            length: 0,
            data: [0u8; FlemPacket::FLEM_MAX_DATA_SIZE as usize],
            internal_counter: 0,
+           length_counter: 0,
         }
     }
 
@@ -156,27 +195,106 @@ impl FlemPacket {
         return self.data;
     }
 
-    pub fn add_byte(&mut self, interface: &FlemInterface, byte: &u8) -> FlemAddByte {
+    pub fn addData(&mut self, data: &[u8]) -> Result<(), &'static str> {
+        if data.len() > FlemPacket::FLEM_MAX_DATA_SIZE as usize {
+            self.device_status = FlemStatus::FLEM_ERROR_PACKET_OVERFLOW;
+            Err("Error: Data exceeded packet size, no data added, device_status updated to
+                FlemStatus::FLEM_ERROR_PACKET_OVERFLOW")
+        }else{
+            for i in 0..data.len() {
+                self.data[i] = data[i];
+            }
+            self.length = data.len() as u16;
+
+            Ok(())
+        }
+    }
+
+    fn validate(&mut self) -> bool {
+        let crc = self.checksum(false);
+        return crc == self.checksum;
+    }
+
+    pub fn add_byte(&mut self, interface: &FlemInterface, byte: &u8) -> Result<bool, &'static str> {
         let retval = FlemAddByte {
             info: FlemStatus::FLEM_INFO_CONSTRUCTING_PACKET,
         };
 
+        //We can't use 10..max_data_u32 below, and have to use
+        //10..=max_data_u32. Therefore, subtract 1 from max data to make things
+        //work.
+        const max_data_u32: u32 = FlemPacket::FLEM_HEADER_SIZE as u32 + FlemPacket::FLEM_MAX_DATA_SIZE as u32;
+        
+        match self.internal_counter {
+            0 => { self.checksum = *byte as u16; },
+            1 => { self.checksum |= (*byte as u16) << 8; },
+            2 => { self.device_cmd = *byte as u32; },
+            3 => { self.device_cmd |= (*byte as u32) << 8; },
+            4 => { self.device_cmd |= (*byte as u32) << 16; },
+            5 => { self.device_cmd |= (*byte as u32) << 24; },
+            6 => { self.device_status = *byte as u16; },
+            7 => { self.device_status = (*byte as u16) << 8; },
+            8 => { self.length = *byte as u16; },
+            9 => { 
+                self.length |= (*byte as u16) << 8; 
+                self.length_counter = 0;
+                if self.length == 0 {
+                    //Packet has no data
+                    if self.validate() {
+                        //Packet has no data and is valid
+                        (interface.valid_handler)(interface, self);
+                        return Ok(true);
+                    } else{
+                        //Packet has no data and is not valid
+                        (interface.error_handler)(interface, self, FlemStatus::FLEM_ERROR_CHECKSUM);
+                        return Ok(false);
+                    }
+                }
+            },
+            10..=max_data_u32 => {
+                println!("{}", self.internal_counter);
+                self.data[self.length_counter] = *byte;
+                self.length_counter += 1;
+                if self.length as usize == self.length_counter {
+                       //Length # of bytes received, validate 
+                        if self.validate() {
+                            //Packet is valid
+                            (interface.valid_handler)(interface, self);
+                            return Ok(true);
+                        } else{
+                            //Packet is not valid
+                            (interface.error_handler)(interface, self, FlemStatus::FLEM_ERROR_CHECKSUM);
+                            return Ok(false);
+                        }
+                    }
+            }, 
+            _ => { return Err("Packet overflow"); }
+        }
+
+        self.internal_counter += 1;
+
         //TODO: add byte to vector
         //TODO: serialize byte to FlemPacket
 
-        return retval;
+        Ok(false)
     }
 
-    pub fn get_next_byte(&mut self, interface: &FlemInterface) -> FlemGetByte {
-       let retval = FlemGetByte {
-           byte: 0,
-           info: FlemStatus::FLEM_INFO_DECONSTRUCTING_PACKET,
-       };
-
-       //TODO: serialize FlemPacket to byte vector
-       //Get next byte from vector, update info
-
-       return retval;
+    pub fn get_next_byte(&mut self, interface: &FlemInterface) -> Result<u8, &'static str> {
+       let bytes = self.asU8Array();
+       let cnt = self.internal_counter;
+       const max_size: u32 = (FlemPacket::FLEM_MAX_DATA_SIZE + 
+           FlemPacket::FLEM_HEADER_SIZE as u16) as u32;
+       match cnt {
+           0..=max_size => {
+               let byte = bytes[self.internal_counter as usize];
+               self.internal_counter += 1;
+               Ok(byte)
+           },
+           _ => {
+               self.internal_counter = 0;
+               Err("Warning: End of packet reached, resetting internal packet counter")
+           }
+       }
     }
 
     pub fn setCommand(&mut self, command: u32) {
@@ -198,16 +316,22 @@ impl FlemPacket {
         return stream;
     }
 
-    pub fn checksum(&self) -> u16 {
-        let crc: u16 = 0;
+    pub fn checksum(&mut self, store: bool) -> u16 {
+        let mut crc: u16 = 0;
         let bytes: &[u8] = self.asU8Array();
-        let mut psize: u16 = bytes.len() as u16;
+        let psize: u16 = bytes.len() as u16;
         
-        while psize > 0 {
-                    
-    
+        //Skip the first 2 checksum bytes
+        for i in 2..psize {
+            let ptr = bytes[i as usize] as u16;    
+            let lut_index = (crc ^ ptr) as u8;
+            let mut tmp_crc = FlemPacket::crc16_tab[lut_index as usize];
+            tmp_crc ^= crc >> 8;
+            crc = tmp_crc;
+        }
 
-            psize -= 1;
+        if store {
+            self.checksum = crc;
         }
 
         return crc;
@@ -220,6 +344,7 @@ impl FlemPacket {
         self.length = 0;
         self.internal_counter = 0;
         self.data = [0u8; FlemPacket::FLEM_MAX_DATA_SIZE as usize];
+        self.length_counter = 0;
     }
 
     pub fn length(&self) -> u16 {
