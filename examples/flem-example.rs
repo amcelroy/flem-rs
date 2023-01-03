@@ -1,93 +1,120 @@
 use flem;
 use flem::*;
 
-static mut TX_PACKET: Option<FlemPacket> = None;
+use core::cell::Cell;
+use std::sync::atomic::{AtomicU8, Ordering};
 
-fn flem_error_handler(_i: &FlemInterface, _p: &mut FlemPacket, status: u16) {
+// Size of packet, including the Header (8 byte)
+// So a size of 108 would leave 100 bytes for data
+const FLEM_PACKET_SIZE: usize = 100;
+
+// For embedded systems, the packet will be assembled in an interrupt, which 
+// means the valid_handler function will be called from the interrupt space. 
+// We whould cache the value of the request to handle in the process_handler
+// function which will occur in the main() thread space.
+static mut RxRequest: AtomicU8 = AtomicU8::new(0);
+
+// Implement our own custom Request commands
+struct FlemRequestProjectX;
+
+impl FlemRequestProjectX {
+    const GET_DATA: u8 = 10;
+}
+
+fn flem_error_handler(_rx: &mut FlemPacket<FLEM_PACKET_SIZE>, status: u8) {
     println!("Error detected: {}", status);
 }
 
-fn flem_valid_handler(_i: &FlemInterface, p: &mut FlemPacket) {
-    println!("Packet success, work your magic!");
+fn flem_valid_handler(rx: &mut FlemPacket<FLEM_PACKET_SIZE>) {
+    println!("Client Packet Received");
+    unsafe {
+        let req = rx.get_request();
+        RxRequest.swap(req, Ordering::Relaxed);
+    }
+}
 
-    let result = match p.get_command() {
-        FlemCommands::FLEM_COMMAND_GET_SMART_DRAIN => {
-            //Note: In C, I have heap allocated rx and tx packets that are 
-            //global to the flem.c project and only accessed within the C file
-            //and not from other sources.
-            
-            unsafe {
-                let mut pp = TX_PACKET.unwrap();
-                pp.reset();
-                pp.set_command(p.get_command());
-                pp.set_status(FlemStatus::FLEM_INFO_PROCESSED);
-                pp.checksum(true);
-                TX_PACKET = Some(pp);
-            }
+fn flem_process_handler(request: u8, 
+    response_packet: &mut FlemPacket<FLEM_PACKET_SIZE>,
+    request_packet: &mut FlemPacket<FLEM_PACKET_SIZE>,
+) {
+    // Get request packet payload, if needed
+    let data = request_packet.get_data_array();
 
-            //let mut tx_packet = FlemPacket::new();
-            //tx_packet.reset();
-            //tx_packet.set_command(p.get_command());
-            //tx_packet.set_status(FlemStatus::FLEM_INFO_PROCESSED);
-            //tx_packet.checksum(true);
-            Ok(())
+    // Decode data if needed
+
+    match request {
+        0 => {
+            // Do nothing here
         },
-        _ => { Err("Command not recognized") }
+        FlemRequest::ID => {
+            let data: [u8; 11] = [0, 1, 2, 3, 4, 5, 4, 3, 2, 1, 0];
+            response_packet.respond_data(request, &data).unwrap(); 
+        },
+        FlemRequestProjectX::GET_DATA => {            
+            let data: [u8; 11] = [0, 1, 2, 3, 4, 5, 4, 3, 2, 1, 0];
+            response_packet.respond_data(request, &data).unwrap();
+        },
+        FlemRequest::IDLE => {
+            // TODO: 
+            // Do nothing?
+            // WFI?
+        },
+        _ => { 
+            response_packet.respond_error(request, FlemResponse::UNKNOWN_REQUEST); 
+        }
     };
-
-    result.unwrap();
 }
 
 fn main() {
-    unsafe {
-        TX_PACKET = Some(FlemPacket::new());
-    }
+    let flem_id = FlemDataId::new( "0.0.1", FLEM_PACKET_SIZE);
 
-    let flem_interface = flem::FlemInterface {
-        id: FlemDataId::new("FLEM Rust Demo", "0.0.1", &[0u32; 10]).unwrap(),
+    let flem_client_interface = flem::FlemInterface::<FLEM_PACKET_SIZE> {
+        id: flem_id,
         error_handler: flem_error_handler,
         valid_handler: flem_valid_handler,
+        process_handler: flem_process_handler,
     };
 
-    let mut rx = flem::FlemPacket::new();
-    let mut tx = flem::FlemPacket::new();
+    let mut host_tx = flem::FlemPacket::<FLEM_PACKET_SIZE>::new();
 
-    println!("Packet data length: {}", rx.get_data_array().len());
+    let mut client_tx = flem::FlemPacket::<FLEM_PACKET_SIZE>::new();
+    let mut client_rx = flem::FlemPacket::<FLEM_PACKET_SIZE>::new();
+
+    println!("Packet data length: {}", client_rx.get_data_array().len());
     
-    println!("Packet length: {}", rx.length());
+    println!("Packet length: {}", client_rx.length());
 
-    tx.set_status(0);
-    tx.set_command(FlemCommands::FLEM_COMMAND_GET_SMART_DRAIN);
+    host_tx.reset(false);
+    host_tx.set_request(FlemRequestProjectX::GET_DATA);
+    host_tx.pack(); // Pack runs checksum and after that it is ready to send
 
-    let crc = tx.checksum(true);
-    println!("Packet CRC: {}", crc);
-    
-    for _i in 0..tx.length() {
-        let next_byte = tx.get_next_byte(&flem_interface).unwrap();
-        rx.add_byte(&flem_interface, &next_byte).unwrap();
+    // Simulates byte-by-byte tranmission
+    for _i in 0..host_tx.length() {
+        let next_byte = host_tx.get_next_byte().unwrap();
+
+        //Transmit from host / receive on client
+
+        client_rx.add_byte(&flem_client_interface, &next_byte).unwrap();
     }
 
-    println!("Example with max data payload");
-             
-    //Try again with some data!
-    tx.reset();
-    rx.reset();
-
-    tx.set_command(FlemCommands::FLEM_COMMAND_GET_SMART_DRAIN);
-    let mut some_data: Vec<u8> = Vec::with_capacity(FlemPacket::FLEM_MAX_DATA_SIZE as usize);
-   
-    for a in 0..FlemPacket::FLEM_MAX_DATA_SIZE {
-        some_data.push(a as u8);
+    // The Client's main thread should be running and handle process requests.
+    // In RTIC, the rx and tx packet should be global resources
+    let mut request: u8 = 0;
+    unsafe {
+        request = RxRequest.load(Ordering::Relaxed);
     }
 
-    tx.add_data(&some_data).unwrap();
-    tx.checksum(true);
+    (flem_client_interface.process_handler)(request, &mut client_tx, &mut client_rx);
 
-    println!("Packet length: {}", tx.length());
+    // Finished with the Rx Packet
+    client_rx.reset_lazy();
 
-    for _i in 0..tx.length() {
-        let next_byte = tx.get_next_byte(&flem_interface).unwrap();
-        rx.add_byte(&flem_interface, &next_byte).unwrap();
+    // TODO: Send out client_tx packet here
+    // TODO: Reset
+
+    unsafe {
+        RxRequest.swap(flem::FlemRequest::IDLE, Ordering::Relaxed);
     }
+
 
 }
