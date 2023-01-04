@@ -1,10 +1,14 @@
+#![no_std]
+
 pub struct FlemRequest;
 pub struct FlemConfig;
 pub struct FlemResponse;
 
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum FlemStatus {
     Ok,
+    PacketReceived,
+    PacketBuilding,
     GetByteFinished,
     VersionLength,
     PacketOverflow,
@@ -38,6 +42,7 @@ impl FlemDataId {
     }
 }
 
+#[derive(Copy, Clone)]
 #[repr(C, packed)]
 pub struct FlemPacket<const T: usize> {
     header: u16,
@@ -48,22 +53,6 @@ pub struct FlemPacket<const T: usize> {
     data: [u8; T],
     internal_counter: u32,
     data_length_counter: usize,
-}
-
-pub type FlemSuccess<const T: usize> = fn(p: &mut FlemPacket<T>);
-
-pub type FlemFailure<const T: usize> = fn(p: &mut FlemPacket<T>, status: u8);
-
-pub type FlemProcess<const T: usize> = fn(flem_request: u8, 
-    request_packet: &mut FlemPacket<T>,
-    response_packet: &mut FlemPacket<T>,
-);
-
-pub struct FlemInterface<const T: usize> {
-    pub id: FlemDataId,
-    pub valid_handler: FlemSuccess<T>,
-    pub error_handler: FlemFailure<T>,
-    pub process_handler: FlemProcess<T>,
 }
 
 impl FlemResponse {
@@ -80,7 +69,7 @@ impl FlemRequest {
     pub const IDLE: u8 = 0xFF;
 }
 
-const FLEM_HEADER_SIZE: u8 = 8;
+const FLEM_HEADER_SIZE: usize = 8;
 const FLEM_HEADER: u16 = 0x5555;
 const CRC16_TAB: [u16; 256] = [
     0x0000, 0xc0c1, 0xc181, 0x0140, 0xc301, 0x03c0, 0x0280, 0xc241,
@@ -157,7 +146,7 @@ impl<const T: usize> FlemPacket<T> {
         self.request = FlemRequest::ID;
         self.response = FlemResponse::SUCCESS;
         
-        // TOOD: Copy ID over
+        // TODO: Copy ID over
 
         self.pack();
     }
@@ -184,26 +173,28 @@ impl<const T: usize> FlemPacket<T> {
         }
     }
 
-    fn validate(&mut self) -> bool {
+    pub fn validate(&mut self) -> bool {
         let crc = self.checksum(false);
         return crc == self.checksum;
     }
 
-    pub fn add_byte(&mut self, interface: &FlemInterface<T>, byte: &u8) -> Result<(), FlemStatus> {      
+    pub fn add_byte(&mut self, byte: &u8) -> FlemStatus {      
         let local_internal_counter = self.internal_counter;
+
+        let mut status: FlemStatus = FlemStatus::PacketBuilding;
 
         match local_internal_counter {
             0 => { 
                 if *byte != 0x55 {
                     self.internal_counter = 0;
-                    return Err(FlemStatus::HeaderBytesNotFound);
+                    status = FlemStatus::HeaderBytesNotFound;
                 }
                 self.header = *byte as u16; 
             },
             1 => { 
                 if *byte != 0x55 {
                     self.internal_counter = 0;
-                    return Err(FlemStatus::HeaderBytesNotFound);
+                    status = FlemStatus::HeaderBytesNotFound;
                 }
                 self.header |= (*byte as u16) << 8; 
             },
@@ -215,45 +206,47 @@ impl<const T: usize> FlemPacket<T> {
             7 => { 
                 self.length |= (*byte as u16) << 8; 
                 self.data_length_counter = 0;
-                if self.length == 0 {
-                    //Packet has no data
-                    if self.validate() {
-                        //Packet has no data and is valid
-                        (interface.valid_handler)(self);
-                        self.reset_counters();
-                        return Ok(());
-                    } else{
-                        //Packet has no data and is not valid
-                        (interface.error_handler)(self, FlemResponse::CHECKSUM_ERROR);
-                        self.reset_counters();
-                        return Err(FlemStatus::ChecksumError);
-                    }
-                }
+                status = FlemStatus::PacketReceived;
+                // if self.length == 0 {
+                //     //Packet has no data
+                //     if self.validate() {
+                //         //Packet has no data and is valid
+                //         (interface.valid_handler)(self);
+                //         self.reset_counters();
+                //         return Ok(());
+                //     } else{
+                //         //Packet has no data and is not valid
+                //         (interface.error_handler)(self, FlemResponse::CHECKSUM_ERROR);
+                //         self.reset_counters();
+                //         return Err(FlemStatus::ChecksumError);
+                //     }
+                // }
             },
-            i if (8 <= i && i <= T as u32) => {
+            i if (FLEM_HEADER_SIZE as u32 <= i && i <= T as u32) => {
                 self.data[self.data_length_counter] = *byte;
                 self.data_length_counter += 1;
                 if self.length as usize == self.data_length_counter {
-                    //Length # of bytes received, validate 
-                    if self.validate() {
-                        //Packet is valid
-                        (interface.valid_handler)(self);
-                        self.reset_counters();
-                        return Ok(());
-                    } else{
-                        //Packet is not valid
-                        (interface.error_handler)(self, FlemResponse::CHECKSUM_ERROR);
-                        self.reset_counters();
-                        return Err(FlemStatus::ChecksumError);
-                    }
+                    status = FlemStatus::PacketReceived;
+                    // //Length # of bytes received, validate 
+                    // if self.validate() {
+                    //     //Packet is valid
+                    //     (interface.valid_handler)(self);
+                    //     self.reset_counters();
+                    //     return Ok(());
+                    // } else{
+                    //     //Packet is not valid
+                    //     (interface.error_handler)(self, FlemResponse::CHECKSUM_ERROR);
+                    //     self.reset_counters();
+                    //     return Err(FlemStatus::ChecksumError);
+                    // }
                 }
             }, 
-            _ => { return Err(FlemStatus::PacketConstruction); }
+            _ => {  status = FlemStatus::PacketOverflow; }
         }
 
         self.internal_counter += 1;
 
-        Ok(())
+        status
     }
 
     /// This function treats the entire packet as a byte array and uses internal
