@@ -53,6 +53,7 @@ pub struct FlemPacket<const T: usize> {
     data: [u8; T],
     internal_counter: u32,
     data_length_counter: usize,
+    status: FlemStatus,
 }
 
 impl FlemResponse {
@@ -118,6 +119,7 @@ impl<const T: usize> FlemPacket<T> {
            data: [0u8; T],
            internal_counter: 0,
            data_length_counter: 0,
+           status: FlemStatus::Ok,
         }
     }
 
@@ -162,6 +164,7 @@ impl<const T: usize> FlemPacket<T> {
 
     pub fn add_data(&mut self, data: &[u8]) -> Result<(), FlemStatus> {
         if data.len() > T {
+            self.status = FlemStatus::PacketOverflow;
             Err(FlemStatus::PacketOverflow)
         }else{
             for i in 0..data.len() {
@@ -169,6 +172,7 @@ impl<const T: usize> FlemPacket<T> {
             }
             self.length = data.len() as u16;
 
+            self.status = FlemStatus::Ok;
             Ok(())
         }
     }
@@ -181,20 +185,20 @@ impl<const T: usize> FlemPacket<T> {
     pub fn add_byte(&mut self, byte: &u8) -> FlemStatus {      
         let local_internal_counter = self.internal_counter;
 
-        let mut status: FlemStatus = FlemStatus::PacketBuilding;
-
         match local_internal_counter {
             0 => { 
                 if *byte != 0x55 {
                     self.internal_counter = 0;
-                    status = FlemStatus::HeaderBytesNotFound;
+                    self.status = FlemStatus::HeaderBytesNotFound;
+                    return self.status;
                 }
                 self.header = *byte as u16; 
             },
             1 => { 
                 if *byte != 0x55 {
                     self.internal_counter = 0;
-                    status = FlemStatus::HeaderBytesNotFound;
+                    self.status = FlemStatus::HeaderBytesNotFound;
+                    return self.status;
                 }
                 self.header |= (*byte as u16) << 8; 
             },
@@ -206,7 +210,7 @@ impl<const T: usize> FlemPacket<T> {
             7 => { 
                 self.length |= (*byte as u16) << 8; 
                 self.data_length_counter = 0;
-                status = FlemStatus::PacketReceived;
+                self.status = FlemStatus::PacketReceived;
                 // if self.length == 0 {
                 //     //Packet has no data
                 //     if self.validate() {
@@ -226,7 +230,7 @@ impl<const T: usize> FlemPacket<T> {
                 self.data[self.data_length_counter] = *byte;
                 self.data_length_counter += 1;
                 if self.length as usize == self.data_length_counter {
-                    status = FlemStatus::PacketReceived;
+                    self.status = FlemStatus::PacketReceived;
                     // //Length # of bytes received, validate 
                     // if self.validate() {
                     //     //Packet is valid
@@ -241,12 +245,13 @@ impl<const T: usize> FlemPacket<T> {
                     // }
                 }
             }, 
-            _ => {  status = FlemStatus::PacketOverflow; }
+            _ => {  self.status = FlemStatus::PacketOverflow; }
         }
 
         self.internal_counter += 1;
+        self.status = FlemStatus::PacketBuilding;
 
-        status
+        self.status
     }
 
     /// This function treats the entire packet as a byte array and uses internal
@@ -259,11 +264,13 @@ impl<const T: usize> FlemPacket<T> {
            i if (i <= T as u32) => {
                let byte = bytes[self.internal_counter as usize];
                self.internal_counter += 1;
+               self.status = FlemStatus::Ok;
                Ok(byte)
            },
            _ => {
                self.internal_counter = 0;
-               Err(FlemStatus::GetByteIssue)
+               self.status = FlemStatus::GetByteFinished;
+               Err(self.status)
            }
        }
     }
@@ -286,6 +293,10 @@ impl<const T: usize> FlemPacket<T> {
     /// Gets the Flem response field
     pub fn get_response(&self) -> u8 {
         self.response
+    }
+
+    pub fn get_status(&mut self) -> FlemStatus {
+        self.status
     }
 
     /// Returns the data as a u8 array
@@ -341,6 +352,7 @@ impl<const T: usize> FlemPacket<T> {
         self.response = 0;
         self.length = 0;
         self.internal_counter = 0;
+        self.status = FlemStatus::Ok;
         if !lazy {
             self.data = [0u8; T];
         }
