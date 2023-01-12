@@ -210,39 +210,27 @@ impl<const T: usize> FlemPacket<T> {
             7 => { 
                 self.length |= (*byte as u16) << 8; 
                 self.data_length_counter = 0;
-                self.status = FlemStatus::PacketReceived;
-                // if self.length == 0 {
-                //     //Packet has no data
-                //     if self.validate() {
-                //         //Packet has no data and is valid
-                //         (interface.valid_handler)(self);
-                //         self.reset_counters();
-                //         return Ok(());
-                //     } else{
-                //         //Packet has no data and is not valid
-                //         (interface.error_handler)(self, FlemResponse::CHECKSUM_ERROR);
-                //         self.reset_counters();
-                //         return Err(FlemStatus::ChecksumError);
-                //     }
-                // }
+                if self.length == 0 {
+                    if self.checksum(false) == self.checksum {
+                        self.status = FlemStatus::PacketReceived;
+                        return self.status;
+                    }else{
+                        self.status = FlemStatus::ChecksumError;
+                        return self.status;
+                    }
+                }
             },
             i if (FLEM_HEADER_SIZE as u32 <= i && i <= T as u32) => {
                 self.data[self.data_length_counter] = *byte;
                 self.data_length_counter += 1;
                 if self.length as usize == self.data_length_counter {
-                    self.status = FlemStatus::PacketReceived;
-                    // //Length # of bytes received, validate 
-                    // if self.validate() {
-                    //     //Packet is valid
-                    //     (interface.valid_handler)(self);
-                    //     self.reset_counters();
-                    //     return Ok(());
-                    // } else{
-                    //     //Packet is not valid
-                    //     (interface.error_handler)(self, FlemResponse::CHECKSUM_ERROR);
-                    //     self.reset_counters();
-                    //     return Err(FlemStatus::ChecksumError);
-                    // }
+                    if self.checksum(false) == self.checksum {
+                        self.status = FlemStatus::PacketReceived;
+                        return self.status;
+                    }else{
+                        self.status = FlemStatus::ChecksumError;
+                        return self.status;
+                    }
                 }
             }, 
             _ => {  self.status = FlemStatus::PacketOverflow; }
