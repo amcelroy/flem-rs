@@ -19,16 +19,17 @@ pub enum FlemStatus {
 }
 
 const FLEM_ID_VERSION_SIZE: usize = 30;
+const FLEM_ID_SIZE: usize = FLEM_ID_VERSION_SIZE + (u16::BITS as usize / 8 as usize);
 pub struct FlemDataId {
     version: [char; FLEM_ID_VERSION_SIZE as usize],
-    max_packet_size: usize,
+    max_packet_size: u16,
 }
 
 impl FlemDataId {
     pub fn new(version: &str, packet_size: usize) -> FlemDataId {
         let mut id = FlemDataId {
             version: ['\0'; FLEM_ID_VERSION_SIZE as usize],
-            max_packet_size: packet_size,
+            max_packet_size: packet_size as u16,
         };
 
         let version_size: usize = version.len();
@@ -40,6 +41,18 @@ impl FlemDataId {
         }
         id
     }
+
+    pub fn as_u8_array(&self) -> &[u8] {
+        let stream: &[u8] = unsafe {  
+            ::core::slice::from_raw_parts(
+                (self as *const FlemDataId) as *const u8, 
+                FLEM_ID_SIZE
+            )
+        };
+        stream
+    }
+
+    
 }
 
 #[derive(Copy, Clone)]
@@ -144,12 +157,35 @@ impl<const T: usize> FlemPacket<T> {
         self.pack();
     }
 
-    pub fn response_id(&mut self, id: &FlemDataId) {
+    pub fn response_id(&mut self, id: &FlemDataId, ascii: bool) {
         self.request = FlemRequest::ID;
         self.response = FlemResponse::SUCCESS;
-        
-        // TODO: Copy ID over
 
+        if ascii {
+            let mut char_array: [u8; FLEM_ID_VERSION_SIZE] = [0; FLEM_ID_VERSION_SIZE];
+            for (index, unicode) in id.version.iter().enumerate() {
+                char_array[index] = *unicode as u8;
+            }
+
+            // Add the ASCII converted array
+            match self.add_data(&char_array) {
+                Ok(_) => { },
+                Err(_) => { self.response = FlemResponse::ERROR; }
+            }
+
+            // Don't forget to add the length!
+            match self.add_data(&id.max_packet_size.to_le_bytes()) {
+                Ok(_) => { },
+                Err(_) => { self.response = FlemResponse::ERROR; }
+            }
+        }else {
+            // Send over the array as unicode
+            match self.add_data(id.as_u8_array()) {
+                Ok(_) => { },
+                Err(_) => { self.response = FlemResponse::ERROR; }
+            }
+        }
+        
         self.pack();
     }
 
@@ -163,14 +199,14 @@ impl<const T: usize> FlemPacket<T> {
     }
 
     pub fn add_data(&mut self, data: &[u8]) -> Result<(), FlemStatus> {
-        if data.len() > T {
+        if data.len() + self.length as usize > T {
             self.status = FlemStatus::PacketOverflow;
             Err(FlemStatus::PacketOverflow)
         }else{
             for i in 0..data.len() {
-                self.data[i] = data[i];
+                self.data[i + self.length as usize] = data[i];
             }
-            self.length = data.len() as u16;
+            self.length += data.len() as u16;
 
             self.status = FlemStatus::Ok;
             Ok(())
