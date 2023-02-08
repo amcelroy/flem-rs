@@ -1,6 +1,7 @@
 #![no_std]
 
-pub struct FlemConfig;
+pub struct Config;
+pub struct Request;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Status {
@@ -75,14 +76,14 @@ pub enum Response {
     Error = 0xFF,
 }
 
-pub enum Request {    
-    Event = 0,
-    Id = 1,
-    Idle = 0xFF,
+impl Request {    
+    pub const EVENT: u8 = 0;
+    pub const ID: u8 = 1;
+    pub const IDLE: u8 = 0xFF;
 }
 
-const FLEM_HEADER_SIZE: usize = 8;
-const FLEM_HEADER: u16 = 0x5555;
+pub const FLEM_HEADER_SIZE: usize = 8;
+pub const FLEM_HEADER: u16 = 0x5555;
 const CRC16_TAB: [u16; 256] = [
     0x0000, 0xc0c1, 0xc181, 0x0140, 0xc301, 0x03c0, 0x0280, 0xc241,
     0xc601, 0x06c0, 0x0780, 0xc741, 0x0500, 0xc5c1, 0xc481, 0x0440,
@@ -156,7 +157,7 @@ impl<const T: usize> Packet<T> {
     }
 
     pub fn response_id(&mut self, id: &DataId, ascii: bool) {
-        self.request = Request::Id as u8;
+        self.request = Request::ID as u8;
         self.response = Response::Success as u8;
 
         if ascii {
@@ -307,6 +308,11 @@ impl<const T: usize> Packet<T> {
         self.request
     }
 
+    /// Returns the stored checksum value
+    pub fn get_checksum(&self) -> u16 {
+        self.checksum
+    }
+
     /// Sets the Flem response field
     pub fn set_response(&mut self, response: u8) {
         self.response = response;
@@ -385,7 +391,6 @@ impl<const T: usize> Packet<T> {
     /// 
     /// # Example
     /// ```
-    /// use flem;
     /// 
     /// pub fn main() {
     ///     let tx = flem::Packet::<100>::new();
