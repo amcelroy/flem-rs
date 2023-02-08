@@ -1,11 +1,9 @@
 #![no_std]
 
-pub struct FlemRequest;
 pub struct FlemConfig;
-pub struct FlemResponse;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum FlemStatus {
+pub enum Status {
     Ok,
     PacketReceived,
     PacketBuilding,
@@ -20,14 +18,14 @@ pub enum FlemStatus {
 
 const FLEM_ID_VERSION_SIZE: usize = 30;
 const FLEM_ID_SIZE: usize = FLEM_ID_VERSION_SIZE + (u16::BITS as usize / 8 as usize);
-pub struct FlemDataId {
+pub struct DataId {
     version: [char; FLEM_ID_VERSION_SIZE as usize],
     max_packet_size: u16,
 }
 
-impl FlemDataId {
-    pub fn new(version: &str, packet_size: usize) -> FlemDataId {
-        let mut id = FlemDataId {
+impl DataId {
+    pub fn new(version: &str, packet_size: usize) -> DataId {
+        let mut id = DataId {
             version: ['\0'; FLEM_ID_VERSION_SIZE as usize],
             max_packet_size: packet_size as u16,
         };
@@ -45,7 +43,7 @@ impl FlemDataId {
     pub fn as_u8_array(&self) -> &[u8] {
         let stream: &[u8] = unsafe {  
             ::core::slice::from_raw_parts(
-                (self as *const FlemDataId) as *const u8, 
+                (self as *const DataId) as *const u8, 
                 FLEM_ID_SIZE
             )
         };
@@ -57,7 +55,7 @@ impl FlemDataId {
 
 #[derive(Copy, Clone)]
 #[repr(C, packed)]
-pub struct FlemPacket<const T: usize> {
+pub struct Packet<const T: usize> {
     header: u16,
     checksum: u16,
     request: u8,
@@ -66,21 +64,21 @@ pub struct FlemPacket<const T: usize> {
     data: [u8; T],
     internal_counter: u32,
     data_length_counter: usize,
-    status: FlemStatus,
+    status: Status,
 }
 
-impl FlemResponse {
-    pub const SUCCESS: u8 = 0;
-    pub const FLEM_BUSY: u8 = 1;
-    pub const UNKNOWN_REQUEST: u8 = 0xFD;
-    pub const CHECKSUM_ERROR: u8 = 0xFE;
-    pub const ERROR: u8 = 0xFF;
+pub enum Response {
+    Success = 0,
+    Busy = 1,
+    UnknownRequest = 0xFD,
+    ChecksumError = 0xFE,
+    Error = 0xFF,
 }
 
-impl FlemRequest {    
-    pub const EVENT: u8 = 0;
-    pub const ID: u8 = 1;
-    pub const IDLE: u8 = 0xFF;
+pub enum Request {    
+    Event = 0,
+    Id = 1,
+    Idle = 0xFF,
 }
 
 const FLEM_HEADER_SIZE: usize = 8;
@@ -120,7 +118,7 @@ const CRC16_TAB: [u16; 256] = [
     0x8201, 0x42c0, 0x4380, 0x8341, 0x4100, 0x81c1, 0x8081, 0x4040
 ];
 
-impl<const T: usize> FlemPacket<T> {
+impl<const T: usize> Packet<T> {
     pub fn new() -> Self {
         assert!(T < u16::MAX as usize, "<T> should be u16::MAX or less"); // Bounds check T, must be less than u16::MAX
         return Self {
@@ -132,20 +130,20 @@ impl<const T: usize> FlemPacket<T> {
            data: [0u8; T],
            internal_counter: 0,
            data_length_counter: 0,
-           status: FlemStatus::Ok,
+           status: Status::Ok,
         }
     }
 
-    pub fn respond_data(&mut self, request: u8, data: &[u8]) -> Result<(), FlemStatus> {
+    pub fn respond_data(&mut self, request: u8, data: &[u8]) -> Result<(), Status> {
         self.request = request;
         match self.add_data(data) {
             Ok(_) => {
-                self.response = FlemResponse::SUCCESS;
+                self.response = Response::Success as u8;
                 self.pack();
                 Ok(())
             },
             Err(e) => {
-                self.response = FlemResponse::ERROR;
+                self.response = Response::Error as u8;
                 Err(e)
             }
         }
@@ -157,9 +155,9 @@ impl<const T: usize> FlemPacket<T> {
         self.pack();
     }
 
-    pub fn response_id(&mut self, id: &FlemDataId, ascii: bool) {
-        self.request = FlemRequest::ID;
-        self.response = FlemResponse::SUCCESS;
+    pub fn response_id(&mut self, id: &DataId, ascii: bool) {
+        self.request = Request::Id as u8;
+        self.response = Response::Success as u8;
 
         if ascii {
             let mut char_array: [u8; FLEM_ID_VERSION_SIZE] = [0; FLEM_ID_VERSION_SIZE];
@@ -170,19 +168,19 @@ impl<const T: usize> FlemPacket<T> {
             // Add the ASCII converted array
             match self.add_data(&char_array) {
                 Ok(_) => { },
-                Err(_) => { self.response = FlemResponse::ERROR; }
+                Err(_) => { self.response = Response::Error as u8; }
             }
 
             // Don't forget to add the length!
             match self.add_data(&id.max_packet_size.to_le_bytes()) {
                 Ok(_) => { },
-                Err(_) => { self.response = FlemResponse::ERROR; }
+                Err(_) => { self.response = Response::Error as u8; }
             }
         }else {
             // Send over the array as unicode
             match self.add_data(id.as_u8_array()) {
                 Ok(_) => { },
-                Err(_) => { self.response = FlemResponse::ERROR; }
+                Err(_) => { self.response = Response::Error as u8; }
             }
         }
         
@@ -198,17 +196,17 @@ impl<const T: usize> FlemPacket<T> {
         return self.data;
     }
 
-    pub fn add_data(&mut self, data: &[u8]) -> Result<(), FlemStatus> {
+    pub fn add_data(&mut self, data: &[u8]) -> Result<(), Status> {
         if data.len() + self.length as usize > T {
-            self.status = FlemStatus::PacketOverflow;
-            Err(FlemStatus::PacketOverflow)
+            self.status = Status::PacketOverflow;
+            Err(Status::PacketOverflow)
         }else{
             for i in 0..data.len() {
                 self.data[i + self.length as usize] = data[i];
             }
             self.length += data.len() as u16;
 
-            self.status = FlemStatus::Ok;
+            self.status = Status::Ok;
             Ok(())
         }
     }
@@ -218,14 +216,14 @@ impl<const T: usize> FlemPacket<T> {
         return crc == self.checksum;
     }
 
-    pub fn add_byte(&mut self, byte: &u8) -> FlemStatus {      
+    pub fn add_byte(&mut self, byte: &u8) -> Status {      
         let local_internal_counter = self.internal_counter;
 
         match local_internal_counter {
             0 => { 
                 if *byte != 0x55 {
                     self.internal_counter = 0;
-                    self.status = FlemStatus::HeaderBytesNotFound;
+                    self.status = Status::HeaderBytesNotFound;
                     return self.status;
                 }
                 self.header = *byte as u16; 
@@ -233,7 +231,7 @@ impl<const T: usize> FlemPacket<T> {
             1 => { 
                 if *byte != 0x55 {
                     self.internal_counter = 0;
-                    self.status = FlemStatus::HeaderBytesNotFound;
+                    self.status = Status::HeaderBytesNotFound;
                     return self.status;
                 }
                 self.header |= (*byte as u16) << 8; 
@@ -248,10 +246,10 @@ impl<const T: usize> FlemPacket<T> {
                 self.data_length_counter = 0;
                 if self.length == 0 {
                     if self.checksum(false) == self.checksum {
-                        self.status = FlemStatus::PacketReceived;
+                        self.status = Status::PacketReceived;
                         return self.status;
                     }else{
-                        self.status = FlemStatus::ChecksumError;
+                        self.status = Status::ChecksumError;
                         return self.status;
                     }
                 }
@@ -261,19 +259,19 @@ impl<const T: usize> FlemPacket<T> {
                 self.data_length_counter += 1;
                 if self.length as usize == self.data_length_counter {
                     if self.checksum(false) == self.checksum {
-                        self.status = FlemStatus::PacketReceived;
+                        self.status = Status::PacketReceived;
                         return self.status;
                     }else{
-                        self.status = FlemStatus::ChecksumError;
+                        self.status = Status::ChecksumError;
                         return self.status;
                     }
                 }
             }, 
-            _ => {  self.status = FlemStatus::PacketOverflow; }
+            _ => {  self.status = Status::PacketOverflow; }
         }
 
         self.internal_counter += 1;
-        self.status = FlemStatus::PacketBuilding;
+        self.status = Status::PacketBuilding;
 
         self.status
     }
@@ -281,19 +279,19 @@ impl<const T: usize> FlemPacket<T> {
     /// This function treats the entire packet as a byte array and uses internal
     /// counters to determine the next byte. Keep calling this until either an
     /// error occurs or 
-    pub fn get_next_byte(&mut self) -> Result<u8, FlemStatus> {
+    pub fn get_next_byte(&mut self) -> Result<u8, Status> {
        let bytes = self.as_u8_array();
        let cnt = self.internal_counter;
        match cnt {
            i if (i <= T as u32) => {
                let byte = bytes[self.internal_counter as usize];
                self.internal_counter += 1;
-               self.status = FlemStatus::Ok;
+               self.status = Status::Ok;
                Ok(byte)
            },
            _ => {
                self.internal_counter = 0;
-               self.status = FlemStatus::GetByteFinished;
+               self.status = Status::GetByteFinished;
                Err(self.status)
            }
        }
@@ -319,7 +317,7 @@ impl<const T: usize> FlemPacket<T> {
         self.response
     }
 
-    pub fn get_status(&mut self) -> FlemStatus {
+    pub fn get_status(&mut self) -> Status {
         self.status
     }
 
@@ -327,7 +325,7 @@ impl<const T: usize> FlemPacket<T> {
     pub fn as_u8_array(&self) -> &[u8] {
         let stream: &[u8] = unsafe {  
             ::core::slice::from_raw_parts(
-                (self as *const FlemPacket<T>) as *const u8, 
+                (self as *const Packet<T>) as *const u8, 
                 self.length() as usize
             )
         };
@@ -376,13 +374,24 @@ impl<const T: usize> FlemPacket<T> {
         self.response = 0;
         self.length = 0;
         self.internal_counter = 0;
-        self.status = FlemStatus::Ok;
+        self.status = Status::Ok;
         if !lazy {
             self.data = [0u8; T];
         }
         self.data_length_counter = 0;
     }
 
+    /// Length of the packet, including the header and data
+    /// 
+    /// # Example
+    /// ```
+    /// use flem;
+    /// 
+    /// pub fn main() {
+    ///     let tx = flem::Packet::<100>::new();
+    /// 
+    /// }
+    /// ```
     pub fn length(&self) -> u16 {
         let mut x: u16 = FLEM_HEADER_SIZE as u16;
         x += self.length as u16;

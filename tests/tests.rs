@@ -1,4 +1,4 @@
-use  flem;
+use flem;
 
 #[cfg(test)]
 mod tests {
@@ -15,7 +15,8 @@ mod tests {
 
     #[test]
     fn checksum() {
-        // TODO: Checksum check
+        let rx = flem::FlemPacket::<FLEM_PACKET_SIZE>::new();
+
     }
 
     #[test]
