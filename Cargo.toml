@@ -12,7 +12,8 @@ bench = false
 path = "src/lib.rs"
 
 [[example]]
-name = "flem-rs"
+name = "flem"
 path = "examples/flem-example.rs"
 
-[dependencies]
+[dev-dependencies]
+heapless = "0.7"

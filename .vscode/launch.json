@@ -26,15 +26,15 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug example 'flem-rs'",
+            "name": "Debug example 'flem'",
             "cargo": {
                 "args": [
                     "build",
-                    "--example=flem-rs",
+                    "--example=flem",
                     "--package=flem"
                 ],
                 "filter": {
-                    "name": "flem-rs",
+                    "name": "flem",
                     "kind": "example"
                 }
             },
@@ -44,16 +44,16 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug unit tests in example 'flem-rs'",
+            "name": "Debug unit tests in example 'flem'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--example=flem-rs",
+                    "--example=flem",
                     "--package=flem"
                 ],
                 "filter": {
-                    "name": "flem-rs",
+                    "name": "flem",
                     "kind": "example"
                 }
             },
