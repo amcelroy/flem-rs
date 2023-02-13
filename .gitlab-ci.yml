@@ -5,10 +5,11 @@ pages:
     - cargo build
     - cargo test
     - cargo doc
+    - mv target/doc/flem/*.* public/
   artifacts:
     paths:
       # The folder that contains the files to be exposed at the Page URL
-      - target/doc/flem
+      - public
   rules:
     # This ensures that only pushes to the default branch will trigger
     # a pages deploy
