@@ -5,7 +5,7 @@ FLEM stands for Flexible, Light-weight, Embedded Messaging and is a Little Endia
 ## Concepts
 
 At its core, FLEM has packets composed of a header, and a data payload. The header is 8 bytes and consists of:
-- Header - 2 bytes - Should always be of value 0x5555
+- Header - 2 bytes - Should always be a value of 0x5555
 - Checksum - 2 bytes - IBM-16 CRC of the packet (exludes the header and checksum bytes)
 - Request - 1 byte - A value from 0 to 255 that indicates what the client should do. There are some reserved values, see below.
 - Response - 1 byte - A value of 0 to 255 that indicates an additional bit of information about the client.
