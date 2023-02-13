@@ -1,6 +1,6 @@
 # FLEM Rust
 
-FLEM stands for Flexible, Light-weight, Embedded Messaging and is a Little Endian messaging protocol intended for use in communicating with embedded systems targets over numerous types of busses. The host makes requests to the client (typically the embedded target). The client processes the requests and responds. The client can asynchronously send an Event packet that the host can deal with as needed.
+FLEM stands for Flexible, Light-weight, Embedded Messaging and is a Little Endian messaging protocol intended for use in communicating with embedded systems targets over numerous types of busses. The host makes requests to the client (typically the embedded target). The client processes the requests and responds. The client can asynchronously send an Event packet that the host can deal with as needed. Together, a host and a client make a partner.
 
 ## Concepts
 
