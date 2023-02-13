@@ -1,4 +1,4 @@
-![example workflow](https://github.com/amcelroy/flem-rust/actions/workflows/main.yml/badge.svg)
+![Flem Build and Tests](https://github.com/amcelroy/flem-rust/actions/workflows/rust.yml/badge.svg)
 
 # FLEM Rust
 
