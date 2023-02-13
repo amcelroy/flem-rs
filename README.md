@@ -6,20 +6,20 @@ FLEM stands for Flexible, Light-weight, Embedded Messaging and is a Little Endia
 
 At its core, FLEM has packets composed of a header, and a data payload. The header is 8 bytes and consists of:
 - Header - 2 bytes - Should always be a value of 0x5555
-- Checksum - 2 bytes - IBM-16 CRC of the packet (exludes the header and checksum bytes)
+- Checksum - 2 bytes - CRC-16 (IBM) of the packet (exludes the header and checksum bytes)
 - Request - 1 byte - A value from 0 to 255 that indicates what the client should do. There are some reserved values, see below.
-- Response - 1 byte - A value of 0 to 255 that indicates an additional bit of information about the client.
-- Length - 2 bytes - 
-- Data - An array **up to** u16::MAX_SIZE. This is set when creating a new packet and represents the maximum length of data that can be sent or received, should anything less than the max can also be transmitted.
+- Response - 1 byte - A value of 0 to 255 that indicates additional information about the client.
+- Length - 2 bytes - Number of bytes being transmitted in the `data` buffer. Can be 0 to u16::MAX.
+- Data - An array **up to** u16::MAX_SIZE. This is set when creating a new packet and represents the maximum length of data that can be sent or received;  anything less than the max can also be transmitted.
 
 ### Header
-The header is a value of 0x5555 and represents a value that can be scanned quickly to determine the start of a packet.
+The header is a value of 0x5555 and represents a set of bytes that can be scanned quickly to determine the start of a packet.
 
 ### Checksum
-An CRC-16 (IBM) checksum that can be checked to ensure the data was transmitted and received without error. The checksum calculation **does not** include the header or the checksum bytes.
+An CRC-16 (IBM) checksum that can be used to ensure the data was transmitted and received without error. The checksum calculation **does not** include the header or the checksum bytes.
 
 ### Request
-Typically, a host send a 1-byte request to a client. A request doesn't need to have any data payload to it, in which case a request is 8 bytes. A response packet should always echo the request to ensure the partner device can double check and route the response correctly.
+Typically, a host send a 1-byte request to a client. A request doesn't need to have any data payload to it, in which case a simple request packet is 8 bytes. A response packet should always echo the request to ensure the partner device can double check and route the response correctly.
 
 Requests are mostly left up to the user to implement, though there are some pre-defined ones.
 
