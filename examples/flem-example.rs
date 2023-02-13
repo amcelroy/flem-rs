@@ -1,7 +1,7 @@
 use flem;
 use flem::*;
 
-use std::{sync::atomic::{AtomicU8, Ordering}, iter::FromIterator};
+use std::{iter::FromIterator};
 
 // Size of packet, including the Header (8 byte)
 // So a size of 108 would leave 100 bytes for data
@@ -72,9 +72,6 @@ fn main() {
             client_tx.response_id(&client_flem_id, true); 
             client_tx.pack();
         },
-        Request::IDLE => {
-            // Put the client into an idle state (sleep or other?)
-        },
         FlemRequestProjectX::GET_DATA => {
             // Custom command implemented for this project (Project X)
             let project_x_data = [0 as u8; 40];
@@ -100,9 +97,6 @@ fn main() {
                     Request::ID => {
                         host_size_data_id = flem::DataId::from(&host_rx.get_data()).unwrap();
                         println!("DataId Message: {}, max packet size: {}", String::from_iter(host_size_data_id.get_version().iter()), host_size_data_id.get_max_packet_size());
-                    },
-                    Request::IDLE => {
-                        // Client is idle?
                     },
                     FlemRequestProjectX::GET_DATA => {
                         // Custom command implemented for this project (Project X)

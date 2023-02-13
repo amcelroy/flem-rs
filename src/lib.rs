@@ -456,8 +456,10 @@ impl<const T: usize> Packet<T> {
     ///                Ok(byte) => {
     ///                    tx_fifo_queue.enqueue(byte).unwrap();
     ///                },                
-    ///                Err(_) => {
+    ///                Err(x) => {
     ///                    /* Tx code should stop transmitting */
+    ///                    status = x;
+    /// 
     ///                }
     ///            }
     ///        }else{
@@ -573,12 +575,6 @@ impl<const T: usize> Packet<T> {
         }
 
         return crc;
-    }
-
-    /// Resets the internal byte counters
-    fn reset_counters(&mut self) {
-        self.internal_counter = 0;
-        self.data_length_counter = 0;
     }
 
     /// Resets the packet to all 0's, but does not clear the data array. Much faster than
