@@ -43,10 +43,6 @@ Two bytes inidcating the amount of data to expect in the packets data field. Thi
 ### Data
 The packet data payload. Can be 0 to u16::MAX bytes. 
 
-## Documentation
-
-See `docs` for documentation.
-
 ## Examples
 
 See `examples/flem-example.rs` for a host to client request and a client to host response.
