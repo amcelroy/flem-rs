@@ -1,7 +1,13 @@
 [package]
 name = "flem"
-version = "0.2.3"
-edition = "2018"
+version = "0.2.4"
+edition = "2021"
+description = "Flexible, Light-weight, Embedded Messaging Protocol"
+repository = "https://github.com/BridgeSource/flem"
+readme = "README.md"
+keywords = ["embedded", "communication", "protocol",]
+authors = ["Austin McElroy <mcelroy.austin@gmail.com, amcelroy@bridgesourcemedical.com>"]
+license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
