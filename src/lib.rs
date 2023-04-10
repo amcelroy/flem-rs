@@ -14,6 +14,8 @@ pub enum Status {
     PacketConstruction,
     GetByteIssue,
     ChecksumError,
+    UnspecifiedError,
+    UnrecognizedRequest,
 }
 
 const FLEM_ID_VERSION_SIZE: usize = 30;
