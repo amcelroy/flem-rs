@@ -409,7 +409,10 @@ impl<const T: usize> Packet<T> {
                     }
                 }
             }, 
-            _ => {  self.status = Status::PacketOverflow; }
+            _ => {  
+                self.status = Status::PacketOverflow; 
+                return self.status;
+            }
         }
 
         self.internal_counter += 1;
