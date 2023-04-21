@@ -547,6 +547,10 @@ impl<const T: usize> Packet<T> {
         self.header
     }
 
+    pub fn get_data_length(&self) -> usize {
+        self.data_length_counter
+    }
+
     /// Returns the _entire_ packet as a u8 byte array
     pub fn bytes(&self) -> &[u8] {
         let stream: &[u8] = unsafe {  
