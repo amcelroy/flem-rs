@@ -1,5 +1,3 @@
-use flem;
-
 #[cfg(test)]
 mod tests {
     
@@ -27,7 +25,7 @@ mod tests {
 
         assert_eq!(tx.length(), flem::FLEM_HEADER_SIZE as usize + payload.len(), "Packet length incorrect");
         
-        let x = tx.bytes();
+        let _x = tx.bytes();
 
         let mut packet_received = false;
         for byte in tx.bytes() {
@@ -98,10 +96,10 @@ mod tests {
         let mut rx = Packet::<PACKET_SIZE>::new();
         let mut tx = Packet::<PACKET_SIZE>::new();
         
-        let mut data = [0 as u8; PACKET_SIZE];
+        let data = [0 as u8; PACKET_SIZE];
         
         /* Add data as needed to the data buffer */
-        tx.add_data(&data);
+        tx.add_data(&data).unwrap();
         tx.set_request(FLEM_EXAMPLE_REQUEST);
         tx.pack();
 

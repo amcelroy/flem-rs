@@ -29,7 +29,7 @@ fn main() {
     
     println!("Packet length: {}", client_rx.length());
 
-    host_tx.reset(false);
+    host_tx.reset();
     host_tx.set_request(flem::Request::ID); // Change this for different responses from the client
     host_tx.pack(); // Pack runs checksum and after that it is ready to send
 
@@ -40,7 +40,7 @@ fn main() {
             Ok(byte) => {
                 next_byte = byte;
             },
-            Err(status) => {
+            Err(_) => {
                 assert!(false, "get_byte() finished");
             }
         }
@@ -69,23 +69,28 @@ fn main() {
             // Clients typically send events, but maybe not in your case!
         },
         Request::ID => {
-            client_tx.response_id(&client_flem_id, true); 
+            client_tx.pack_id(&client_flem_id, true); 
             client_tx.pack();
         },
         FlemRequestProjectX::GET_DATA => {
             // Custom command implemented for this project (Project X)
             let project_x_data = [0 as u8; 40];
-            client_tx.respond_data(client_rx.get_request(), &project_x_data);
+            client_tx.pack_data(client_rx.get_request(), &project_x_data).unwrap_or_else(|error| {
+                println!("Error packing the data with code: {:?}", error);
+            });
             println!("Request received: FlemRequestProjectX::GET_DATA");
         },
         _ => {
-            client_tx.respond_error(client_rx.get_request(), flem::Response::UnknownRequest as u8);
+            client_tx.pack_error(client_rx.get_request(), 
+            flem::Response::UnknownRequest as u8, 
+            &[]).unwrap_or_else(|error| {
+                println!("Error packing the error with code: {:?}", error);
+            });
         }
     }
     client_rx.reset_lazy(); // Reset the client_rx packet so it can be used again
 
     /* Send response back to host */
-    let mut host_size_data_id = DataId::new("", 0);
     for byte in client_tx.bytes() {
         match host_rx.add_byte(*byte) {
             flem::Status::PacketReceived => {
@@ -95,7 +100,7 @@ fn main() {
                         // Hosts typically consume events, but maybe not in your case!
                     },
                     Request::ID => {
-                        host_size_data_id = flem::DataId::from(&host_rx.get_data()).unwrap();
+                        let host_size_data_id = flem::DataId::from(&host_rx.get_data()).unwrap();
                         println!("DataId Message: {}, max packet size: {}", String::from_iter(host_size_data_id.get_version().iter()), host_size_data_id.get_max_packet_size());
                     },
                     FlemRequestProjectX::GET_DATA => {

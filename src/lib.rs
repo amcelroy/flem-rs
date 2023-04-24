@@ -175,7 +175,8 @@ impl<const T: usize> Packet<T> {
     }
 
     /// Convenience function to response with data. The response byte is automatically set to Response::Success.
-    pub fn respond_data(&mut self, request: u8, data: &[u8]) -> Result<(), Status> {
+    pub fn pack_data(&mut self, request: u8, data: &[u8]) -> Result<(), Status> {
+        self.reset_lazy();
         self.request = request;
         match self.add_data(data) {
             Ok(_) => {
@@ -184,17 +185,42 @@ impl<const T: usize> Packet<T> {
                 Ok(())
             },
             Err(e) => {
-                self.response = Response::Error as u8;
                 Err(e)
             }
         }
     }
 
     /// Convenience function to respond quickly if an error occurs (without data).
-    pub fn respond_error(&mut self, request: u8, response: u8 ) {
+    pub fn pack_error(&mut self, request: u8, error: u8, data: &[u8]) -> Result<(), Status> {
+        self.reset_lazy();
         self.request = request;
-        self.response = response;
-        self.pack();
+        self.response = error;
+        match self.add_data(data) {
+            Ok(_) => {
+                self.response = error;
+                self.pack();
+                Ok(())
+            },
+            Err(e) => {
+                Err(e)
+            }
+        }
+    }
+
+    pub fn pack_event(&mut self, request_of_host: u8, data: &[u8]) -> Result<(), Status> {
+        self.reset_lazy();
+        self.request = Request::EVENT;
+        self.response = request_of_host;
+        match self.add_data(data) {
+            Ok(_) => {
+                self.pack();
+                Ok(())
+            },
+            Err(e) => {
+                Err(e)
+            }
+        }
+
     }
 
     /// Convenience function to respond with the ID. If communicating with UTF-8 partners, ascii should be true. This 
@@ -203,7 +229,8 @@ impl<const T: usize> Packet<T> {
     /// # Arguments
     /// 
     /// * `ascii` - Packages the ID as a UTF-8 ID. Used when talking to C/C++ partners.
-    pub fn response_id(&mut self, id: &DataId, ascii: bool) {
+    pub fn pack_id(&mut self, id: &DataId, ascii: bool) {
+        self.reset_lazy();
         self.request = Request::ID as u8;
         self.response = Response::Success as u8;
 
@@ -589,7 +616,13 @@ impl<const T: usize> Packet<T> {
     /// Resets the packet to all 0's, but does not clear the data array. Much faster than
     /// zeroing out the packet's data buffer. **Packets should be cleared before reusing, both Rx and Tx.**
     pub fn reset_lazy(&mut self) {
-        self.reset(true);
+        self.checksum = 0;
+        self.request = 0;
+        self.response = 0;
+        self.length = 0;
+        self.internal_counter = 0;
+        self.status = Status::Ok;
+        self.data_length_counter = 0;
     }
 
     /// Resets the packet. The data array is cleared only if clear_data is true. **Packets should be
@@ -598,15 +631,10 @@ impl<const T: usize> Packet<T> {
     /// # Arguments
     /// 
     /// * `clear_data` - Zero out the data array.
-    pub fn reset(&mut self, clear_data: bool) {
-        self.checksum = 0;
-        self.request = 0;
-        self.response = 0;
-        self.length = 0;
-        self.internal_counter = 0;
-        self.status = Status::Ok;
-        if !clear_data {
-            self.data = [0u8; T];
+    pub fn reset(&mut self) {
+        self.reset_lazy();
+        for i in 0..T {
+            self.data[i] = 0;
         }
         self.data_length_counter = 0;
     }
