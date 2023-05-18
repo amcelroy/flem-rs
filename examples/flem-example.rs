@@ -15,7 +15,7 @@ impl FlemRequestProjectX {
 }
 
 fn main() {
-    let client_flem_id = DataId::new( "0.0.1", FLEM_PACKET_SIZE);
+    let client_flem_id = DataId::new( "Example Project 25 chars.", 0, 1, 0, FLEM_PACKET_SIZE);
 
     // There should typically be at least 1 packet each for Rx / Tx
     let mut host_tx = flem::Packet::<FLEM_PACKET_SIZE>::new();
@@ -101,7 +101,14 @@ fn main() {
                     },
                     Request::ID => {
                         let host_size_data_id = flem::DataId::from(&host_rx.get_data()).unwrap();
-                        println!("DataId Message: {}, max packet size: {}", String::from_iter(host_size_data_id.get_version().iter()), host_size_data_id.get_max_packet_size());
+                        println!(
+                            "DataId Message: {}, max packet size: {}, Major: {}, Minor: {}, Patch: {}", 
+                            String::from_iter(host_size_data_id.get_name().iter()), 
+                            host_size_data_id.get_max_packet_size(),
+                            host_size_data_id.get_major(),
+                            host_size_data_id.get_minor(),
+                            host_size_data_id.get_patch()
+                        );
                     },
                     FlemRequestProjectX::GET_DATA => {
                         // Custom command implemented for this project (Project X)

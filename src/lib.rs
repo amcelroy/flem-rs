@@ -1,5 +1,7 @@
 #![no_std]
 
+use core::slice::Chunks;
+
 pub struct Request;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -18,53 +20,94 @@ pub enum Status {
     UnrecognizedRequest,
 }
 
-const FLEM_ID_VERSION_SIZE: usize = 30;
-const FLEM_ID_SIZE: usize = FLEM_ID_VERSION_SIZE + (u16::BITS as usize / 8 as usize);
+const FLEM_ID_NAME_SIZE: usize = 25;
+
+/// Const ID Size:
+///     - 25 bytes Name buffer
+///     - 2 bytes for packet size
+///     - 3 bytes for major, minor, patch
+const FLEM_ID_SIZE: usize = FLEM_ID_NAME_SIZE + (u16::BITS as usize / 8 as usize) + 3;
+#[repr(C)]
 pub struct DataId {
-    version: [char; FLEM_ID_VERSION_SIZE as usize],
+    major: u8,
+    minor: u8,
+    patch: u8,
     max_packet_size: u16,
+    name: [char; FLEM_ID_NAME_SIZE as usize],
 }
 
 impl DataId {
-    pub fn new(version: &str, packet_size: usize) -> DataId {
+    pub fn new(name: &str, major: u8, minor: u8, patch: u8, packet_size: usize) -> DataId {
         let mut id = DataId {
-            version: ['\0'; FLEM_ID_VERSION_SIZE as usize],
+            major: major,
+            minor: minor,
+            patch: patch,
+            name: ['\0'; FLEM_ID_NAME_SIZE as usize],
             max_packet_size: packet_size as u16,
         };
 
-        let version_size: usize = version.len();
+        let version_size: usize = name.len();
 
-        assert!(version_size < FLEM_ID_VERSION_SIZE, "Version should be 30 characters or less");
+        assert!(version_size <= FLEM_ID_NAME_SIZE, "Version should be 25 characters or less");
 
         for a in 0..version_size {
-            id.version[a as usize] = version.as_bytes()[a as usize] as char;
+            id.name[a as usize] = name.as_bytes()[a as usize] as char;
         }
         id
     }
 
     pub fn from(data: &[u8]) -> Option<DataId> {
-        let mut buffer = ['\0'; FLEM_ID_VERSION_SIZE as usize];
+        let mut buffer = ['\0'; FLEM_ID_NAME_SIZE as usize];
         let mut packet_length_buffer = [0 as u8; 2];
+        let mut major: u8 = 0;
+        let mut minor: u8 = 0;
+        let mut patch: u8 = 0;
+
+        let mut name_counter = 0;
+        let mut packet_size_counter = 0;
 
         for (index, byte) in data.iter().enumerate() {
             match index {
-                i if i < FLEM_ID_VERSION_SIZE => {
-                    buffer[i as usize] = *byte as char;
-                },
-                j if (j <= FLEM_ID_VERSION_SIZE && j < FLEM_ID_SIZE) => {
-                    packet_length_buffer[j as usize - FLEM_ID_VERSION_SIZE] = *byte;
-                },
-                _ => {
-                    /* Ignore? Send None? */
+                0 => {
+                    major = *byte;
                 }
+                1 => {
+                    minor = *byte;
+                }
+                2 => {
+                    patch = *byte;
+                }
+                j if (j == 3 || j == 4) => {
+                    packet_length_buffer[packet_size_counter] = *byte;
+                    packet_size_counter += 1;
+                },
+                i if(5 <= i && i < FLEM_ID_NAME_SIZE + 5) => {
+                    buffer[name_counter] = *byte as char;
+                    name_counter += 1;
+                }
+                _  => {
+
+                },
             }
         }
 
-        Some( DataId { version: buffer, max_packet_size: u16::from_le_bytes(packet_length_buffer) } )
+        Some( DataId { major, minor, patch, name: buffer, max_packet_size: u16::from_le_bytes(packet_length_buffer) } )
     }
 
-    pub fn get_version(&self) -> &[char; FLEM_ID_VERSION_SIZE] {
-        &self.version
+    pub fn get_name(&self) -> &[char; FLEM_ID_NAME_SIZE] {
+        &self.name
+    }
+
+    pub fn get_major(&self) -> u8 {
+        self.major
+    }
+
+    pub fn get_minor(&self) -> u8 {
+        self.minor
+    }
+
+    pub fn get_patch(&self) -> u8 {
+        self.patch
     }
 
     pub fn get_max_packet_size(&self) -> u16 {
@@ -229,37 +272,32 @@ impl<const T: usize> Packet<T> {
     /// # Arguments
     /// 
     /// * `ascii` - Packages the ID as a UTF-8 ID. Used when talking to C/C++ partners.
-    pub fn pack_id(&mut self, id: &DataId, ascii: bool) {
+    pub fn pack_id(&mut self, id: &DataId, ascii: bool) -> Result<(), Status> {
         self.reset_lazy();
         self.request = Request::ID as u8;
         self.response = Response::Success as u8;
 
         if ascii {
-            let mut char_array: [u8; FLEM_ID_VERSION_SIZE] = [0; FLEM_ID_VERSION_SIZE];
-            for (index, unicode) in id.version.iter().enumerate() {
+            self.add_data(&[id.get_major(); 1])?;
+            self.add_data(&[id.get_minor(); 1])?;
+            self.add_data(&[id.get_patch(); 1])?;
+            self.add_data(&id.max_packet_size.to_le_bytes())?;
+
+            let mut char_array: [u8; FLEM_ID_NAME_SIZE] = [0; FLEM_ID_NAME_SIZE];
+            for (index, unicode) in id.name.iter().enumerate() {
                 char_array[index] = *unicode as u8;
             }
 
             // Add the ASCII converted array
-            match self.add_data(&char_array) {
-                Ok(_) => { },
-                Err(_) => { self.response = Response::Error as u8; }
-            }
-
-            // Don't forget to add the length!
-            match self.add_data(&id.max_packet_size.to_le_bytes()) {
-                Ok(_) => { },
-                Err(_) => { self.response = Response::Error as u8; }
-            }
+            self.add_data(&char_array)?;
         }else {
             // Send over the array as unicode
-            match self.add_data(id.as_u8_array()) {
-                Ok(_) => { },
-                Err(_) => { self.response = Response::Error as u8; }
-            }
+            self.add_data(id.as_u8_array())?;
         }
         
         self.pack();
+
+        Ok(())
     }
 
     /// Pack a packet up: adds header and computes checksum.
