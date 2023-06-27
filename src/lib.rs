@@ -18,6 +18,7 @@ pub enum Status {
     ChecksumError,
     UnspecifiedError,
     UnrecognizedRequest,
+    InvalidDataLengthDetected,
 }
 
 const FLEM_ID_NAME_SIZE: usize = 25;
@@ -450,6 +451,11 @@ impl<const T: usize> Packet<T> {
                         self.status = Status::ChecksumError;
                         return self.status;
                     }
+                }
+
+                if self.length as usize > T {
+                    self.status = Status::InvalidDataLengthDetected;
+                    return self.status;
                 }
             }
             i if (FLEM_HEADER_SIZE as u32 <= i && i < FLEM_HEADER_SIZE as u32 + T as u32) => {
