@@ -46,7 +46,8 @@ In Rust, a few convenience functions are provided to `lazy_reset` the packet,
 add data, set the header bytes, and perform the pack operation:
 - `pack_data` - Adds data to a packet with a Response byte of `SUCCESS` and the
 Request byte set by the user.
-- `pack_error` - Adds data to a packet with Request and Response bytes specified by the user. If no data needs to be transmitted, use an empty data array `&[]`.
+- `pack_error` - Adds data to a packet with Request and Response bytes specified 
+by the user. If no data needs to be transmitted, use an empty data array `&[]`.
 - `pack_event` - Adds data to a packet with the Request byte set as an `EVENT`
 and the Response byte set to a user defined value.
 
@@ -55,13 +56,14 @@ __Note__: If no data is to be transmitted, set data to an empty data array
 
 ## Header
 The header is a value of 0x5555 and represents a set of bytes that can be 
-scanned quickly to determine the start of a packet. This may be expanded in the future to allow for other Header bytes.
+scanned quickly to determine the start of a packet. This may be expanded in the 
+future to allow for other Header byte patterns.
 
 ## Checksum
-An CRC-16 (IBM) checksum that can be used to ensure the data was transmitted and
- received without error. The checksum calculation **does not** include the 
- header or the checksum bytes; ensure they are either zero or skipped if
- implemented in another language.
+A CRC-16 (IBM) checksum that can be used to ensure the data was transmitted and
+received without error. The checksum calculation **does not** include the 
+header or the checksum bytes; ensure they are either zero or skipped if
+implemented in another language.
 
 ## Request
 Typically, a host sends a 1-byte request to a client. A request doesn't need to 
@@ -85,6 +87,11 @@ indicates a version, serial number, name, or some other information (30 bytes,
 char) and a u16 indicating the partners max packet size.  This requires that 
 the client / host use packet sizes of at least 32 bytes. Smaller Ids can be 
 used, or not responded to, but it is up to the user to implement.
+
+Our company has a seperate project that has all of the responses, requests, and
+events for each project in a different Rust sub-module. This way, our 
+communication protocols are all in one spot and revision controlled for use in
+future projects.
 
 ## Response
 Responses are 1-byte codes that indicate the status of the client.
