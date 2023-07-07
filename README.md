@@ -121,5 +121,5 @@ The packet data payload. Can be 0 to u16::MAX bytes.
 
 ## Examples
 
-See `examples/flem-example.rs` for a host to client request and a client to host
- response.
+See `examples/example.rs` for a host to client request and a client to host
+response.
