@@ -1,6 +1,11 @@
 #[cfg(test)]
 mod tests {
 
+    use flem::buffer::{
+        f32_to_le_buffer, i16_to_le_buffer, i32_to_le_buffer, le_buffer_to_f32, le_buffer_to_i16,
+        le_buffer_to_i32, le_buffer_to_u16, le_buffer_to_u32, u16_to_le_buffer, u32_to_le_buffer,
+    };
+
     const FLEM_PACKET_SIZE: usize = 108;
 
     #[test]
@@ -184,5 +189,125 @@ mod tests {
         for i in 0..rx_bytes.len() {
             assert_eq!(rx_bytes[i], tx_bytes[i], "Rx and Tx packets don't match");
         }
+    }
+
+    #[test]
+    fn test_f32() {
+        let test_data = [0.0, 1.0, 2.0, 3.0];
+        let mut buffer = [0 as u8; 16];
+
+        let mut offset = 0;
+        for num in test_data {
+            // There shouldn't be any panics
+            f32_to_le_buffer(num, &mut buffer, &mut offset).unwrap();
+        }
+
+        let mut results = [0 as f32; 4];
+        offset = 0;
+        results[0] = le_buffer_to_f32(&buffer, &mut offset).unwrap();
+        results[1] = le_buffer_to_f32(&buffer, &mut offset).unwrap();
+        results[2] = le_buffer_to_f32(&buffer, &mut offset).unwrap();
+        results[3] = le_buffer_to_f32(&buffer, &mut offset).unwrap();
+
+        assert_eq!(results[0], test_data[0], "Error in f32 buffer module");
+        assert_eq!(results[1], test_data[1], "Error in f32 buffer module");
+        assert_eq!(results[2], test_data[2], "Error in f32 buffer module");
+        assert_eq!(results[3], test_data[3], "Error in f32 buffer module");
+    }
+
+    #[test]
+    fn test_i32() {
+        let test_data = [0 as i32, 1, 2, 3];
+        let mut buffer = [0 as u8; 16];
+
+        let mut offset = 0;
+        for num in test_data {
+            // There shouldn't be any panics
+            i32_to_le_buffer(num, &mut buffer, &mut offset).unwrap();
+        }
+
+        let mut results = [0 as i32; 4];
+        offset = 0;
+        results[0] = le_buffer_to_i32(&buffer, &mut offset).unwrap();
+        results[1] = le_buffer_to_i32(&buffer, &mut offset).unwrap();
+        results[2] = le_buffer_to_i32(&buffer, &mut offset).unwrap();
+        results[3] = le_buffer_to_i32(&buffer, &mut offset).unwrap();
+
+        assert_eq!(results[0], test_data[0], "Error in i32 buffer module");
+        assert_eq!(results[1], test_data[1], "Error in i32 buffer module");
+        assert_eq!(results[2], test_data[2], "Error in i32 buffer module");
+        assert_eq!(results[3], test_data[3], "Error in i32 buffer module");
+    }
+
+    #[test]
+    fn test_u32() {
+        let test_data = [0 as u32, 1, 2, 3];
+        let mut buffer = [0 as u8; 16];
+
+        let mut offset = 0;
+        for num in test_data {
+            // There shouldn't be any panics
+            u32_to_le_buffer(num, &mut buffer, &mut offset).unwrap();
+        }
+
+        let mut results = [0 as u32; 4];
+        offset = 0;
+        results[0] = le_buffer_to_u32(&buffer, &mut offset).unwrap();
+        results[1] = le_buffer_to_u32(&buffer, &mut offset).unwrap();
+        results[2] = le_buffer_to_u32(&buffer, &mut offset).unwrap();
+        results[3] = le_buffer_to_u32(&buffer, &mut offset).unwrap();
+
+        assert_eq!(results[0], test_data[0], "Error in u32 buffer module");
+        assert_eq!(results[1], test_data[1], "Error in u32 buffer module");
+        assert_eq!(results[2], test_data[2], "Error in u32 buffer module");
+        assert_eq!(results[3], test_data[3], "Error in u32 buffer module");
+    }
+
+    #[test]
+    fn test_u16() {
+        let test_data = [0 as u16, 1, 2, 3];
+        let mut buffer = [0 as u8; 8];
+
+        let mut offset = 0;
+        for num in test_data {
+            // There shouldn't be any panics
+            u16_to_le_buffer(num, &mut buffer, &mut offset).unwrap();
+        }
+
+        let mut results = [0 as u16; 4];
+        offset = 0;
+        results[0] = le_buffer_to_u16(&buffer, &mut offset).unwrap();
+        results[1] = le_buffer_to_u16(&buffer, &mut offset).unwrap();
+        results[2] = le_buffer_to_u16(&buffer, &mut offset).unwrap();
+        results[3] = le_buffer_to_u16(&buffer, &mut offset).unwrap();
+
+        assert_eq!(results[0], test_data[0], "Error in u16 buffer module");
+        assert_eq!(results[1], test_data[1], "Error in u16 buffer module");
+        assert_eq!(results[2], test_data[2], "Error in u16 buffer module");
+        assert_eq!(results[3], test_data[3], "Error in u16 buffer module");
+    }
+
+    #[test]
+    fn test_i16() {
+        let test_data = [0 as i16, 1, 2, 3];
+        let mut buffer = [0 as u8; 8];
+
+        let mut offset = 0;
+        for num in test_data {
+            // There shouldn't be any panics
+            i16_to_le_buffer(num, &mut buffer, &mut offset).unwrap();
+        }
+
+        let mut results = [0 as i16; 4];
+        offset = 0;
+        results[0] = le_buffer_to_i16(&buffer, &mut offset).unwrap();
+        results[1] = le_buffer_to_i16(&buffer, &mut offset).unwrap();
+        results[2] = le_buffer_to_i16(&buffer, &mut offset).unwrap();
+        results[3] = le_buffer_to_i16(&buffer, &mut offset).unwrap();
+
+        assert_eq!(results[0], test_data[0], "Error in i16 buffer module");
+        assert_eq!(results[1], test_data[1], "Error in i16 buffer module");
+        assert_eq!(results[2], test_data[2], "Error in i16 buffer module");
+        assert_eq!(results[3], test_data[3], "Error in i16 buffer module");
     }
 }
