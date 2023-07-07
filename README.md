@@ -27,7 +27,7 @@ packet and represents the maximum length of data that can be sent or received;
 anything less than the max can also be transmitted. The Packet is allocated with
 MAX_SIZE bytes as a buffer, something to consider on low memory systems.
 
-## Reseting a packet
+## Resetting a packet
 A packet should be reset before reuse. There are 2 methods provided to do this:
 - `reset()` - Performs a full reset of the packet, by zeroing out all bytes
 including zeroing out the data bytes.
