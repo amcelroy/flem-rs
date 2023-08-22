@@ -79,15 +79,14 @@ fn main() {
     // Transmit request
     for byte in host_tx.bytes() {
         match client_rx.construct(*byte) {
-            Status::PacketReceived => {
+            Ok(_) => {
                 print!("Packet received on client");
             }
-            Status::Ok => {
-                // do nothing, keep going
-            }
             // More error checking here, if needed
-            _ => {
-                assert!(true, "An error shouldn't have occurred in this example");
+            Err(status) => {
+                if status != Status::PacketBuilding {
+                    assert!(true, "An error shouldn't have occurred in this example");
+                }
             }
         }
     }
@@ -100,14 +99,10 @@ fn main() {
 
     for byte in client_tx.bytes() {
         match host_rx.construct(*byte) {
-            Status::PacketReceived => {
+            Ok(_) => {
                 print!("Packet received on host");
             }
-            Status::Ok => {
-                // do nothing, keep going
-            }
-            // More error checking here, if needed
-            _ => {
+            Err(_) => {
                 assert!(true, "An error shouldn't have occurred in this example");
             }
         }

@@ -42,15 +42,16 @@ mod tests {
         let mut packet_received = false;
         for byte in tx.bytes() {
             match rx.construct(*byte) {
-                flem::Status::PacketReceived => {
+                Ok(_) => {
                     byte_counter += 1;
                     packet_received = true;
                 }
-                flem::Status::PacketBuilding => {
-                    byte_counter += 1;
-                }
-                _ => {
-                    assert!(true, "Should not be hit");
+                Err(status) => {
+                    if status == flem::Status::PacketBuilding {
+                        byte_counter += 1;
+                    } else {
+                        assert!(true, "Should not be hit");
+                    }
                 }
             }
         }
@@ -169,7 +170,7 @@ mod tests {
                 // Queue is full, Tx the data, Rx on the other end
                 while !tx_fifo_queue.is_empty() {
                     match rx.construct(tx_fifo_queue.dequeue().unwrap()) {
-                        flem::Status::PacketReceived => {
+                        Ok(_) => {
                             packet_received = true;
                             keep_sending = false;
                         }

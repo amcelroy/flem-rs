@@ -51,14 +51,13 @@ fn main() {
 
         //Transmit from host / receive on client
         match client_rx.construct(next_byte) {
-            Status::PacketReceived => {
+            Ok(_) => {
                 println!("Packet received successfully!");
             }
-            Status::PacketBuilding => {
-                // No issues, keep going
-            }
-            _ => {
-                println!("Packet error occurred!");
+            Err(status) => {
+                if status != Status::PacketBuilding {
+                    println!("Packet error occurred!");
+                }
             }
         }
     }
@@ -103,7 +102,7 @@ fn main() {
 
         // ** Byte recevied by host, construct the
         match host_rx.construct(*byte) {
-            flem::Status::PacketReceived => {
+            Ok(_) => {
                 // Determine what to do with the received packet
                 match host_rx.get_request() {
                     Request::EVENT => {
@@ -131,11 +130,14 @@ fn main() {
 
                 host_rx.reset_lazy(); // Reset the host_rx so it can be used again
             }
-            _ => {
+            Err(status) => {
                 /* Catch other errors here */
 
-                // Usually good to reset the packet after an issue
-                host_rx.reset_lazy();
+                if status != Status::PacketBuilding {
+                    println!("Packet error occurred!");
+                    // Usually good to reset the packet after an issue
+                    host_rx.reset_lazy();
+                }
             }
         }
     }

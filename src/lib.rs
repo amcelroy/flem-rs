@@ -14,7 +14,6 @@ pub enum Status {
     VersionLength,
     PacketOverflow,
     HeaderBytesNotFound,
-    PacketConstruction,
     GetByteIssue,
     ChecksumError,
     UnspecifiedError,
@@ -353,68 +352,6 @@ impl<const T: usize> Packet<T> {
         return crc == self.checksum;
     }
 
-    /// Deprecated, use .construct(...)
-    ///
-    /// Add a received byte to a packet. An internal counter keeps track of where the byte should go.
-    /// The current return value is the Status and should be one of the following:
-    /// - HeaderBytesNotFound - The packet header was not found
-    /// - ChecksumError - The computed checksum does not match the sent checksum
-    /// - PacketOverflow - Data is being added beyond length of the packet
-    /// - PacketBuilding - This should be the default most of the time and indicates the packet is being built without issues so far.
-    /// - PacketReceived - All data bytes have been received and the checksum has been validated
-    ///
-    /// # Arguments
-    ///
-    /// * `byte` - A single byte to add to a packet.
-    ///
-    /// # Example
-    /// ```
-    /// pub fn main() {
-    ///     use flem::{Packet};
-    ///
-    ///     const PACKET_SIZE: usize = 64; // 64 byte packet
-    ///
-    ///     const FLEM_EXAMPLE_REQUEST: u8 = 0xF;
-    ///
-    ///     let mut rx = Packet::<PACKET_SIZE>::new();
-    ///     let mut tx = Packet::<PACKET_SIZE>::new();
-    ///
-    ///     let mut data = [0 as u8; PACKET_SIZE];
-    ///
-    ///     /* Add data as needed to the data buffer */
-    ///
-    ///     tx.add_data(&data);
-    ///     tx.set_request(FLEM_EXAMPLE_REQUEST);
-    ///     tx.pack();
-    ///
-    ///
-    ///     /* Send data */
-    ///     
-    ///     let tx_as_u8_array = tx.bytes();
-    ///
-    ///     // We are sending bytes across a hardware bus
-    ///     let mut packet_received = false;
-    ///     for byte in tx_as_u8_array {
-    ///         // The received is getting bytes on the hardware bus
-    ///         match rx.add_byte(*byte) {
-    ///             flem::Status::PacketReceived => {
-    ///                 packet_received = true;
-    ///             },
-    ///             _ => {
-    ///                 /* Handle other cases here */
-    ///             }
-    ///         }
-    ///     }
-    ///
-    ///     assert!(packet_received, "Packet should have been constructed and validated.");
-    ///
-    /// }
-    /// ```
-    #[deprecated]
-    pub fn add_byte(&mut self, byte: u8) -> Status {
-        self.construct(byte)
-    }
-
     /// Contruct a packet one byte at a time. An internal counter keeps track of where the byte should go.
     /// The current return value is the Status and should be one of the following:
     /// - HeaderBytesNotFound - The packet header was not found
@@ -456,11 +393,11 @@ impl<const T: usize> Packet<T> {
     ///     let mut packet_received = false;
     ///     for byte in tx_as_u8_array {
     ///         // The received is getting bytes on the hardware bus
-    ///         match rx.add_byte(*byte) {
-    ///             flem::Status::PacketReceived => {
+    ///         match rx.construct(*byte) {
+    ///             Ok(_) => {
     ///                 packet_received = true;
     ///             },
-    ///             _ => {
+    ///             Err(status) => {
     ///                 /* Handle other cases here */
     ///             }
     ///         }
@@ -470,7 +407,7 @@ impl<const T: usize> Packet<T> {
     ///
     /// }
     /// ```
-    pub fn construct(&mut self, byte: u8) -> Status {
+    pub fn construct(&mut self, byte: u8) -> Result<(), Status> {
         let local_internal_counter = self.internal_counter;
 
         match local_internal_counter {
@@ -478,7 +415,7 @@ impl<const T: usize> Packet<T> {
                 if byte != 0x55 {
                     self.internal_counter = 0;
                     self.status = Status::HeaderBytesNotFound;
-                    return self.status;
+                    return Err(self.status);
                 }
                 self.header = byte as u16;
             }
@@ -486,7 +423,7 @@ impl<const T: usize> Packet<T> {
                 if byte != 0x55 {
                     self.internal_counter = 0;
                     self.status = Status::HeaderBytesNotFound;
-                    return self.status;
+                    return Err(self.status);
                 }
                 self.header |= (byte as u16) << 8;
             }
@@ -511,16 +448,16 @@ impl<const T: usize> Packet<T> {
                 if self.length == 0 {
                     if self.validate() {
                         self.status = Status::PacketReceived;
-                        return self.status;
+                        return Ok(());
                     } else {
                         self.status = Status::ChecksumError;
-                        return self.status;
+                        return Err(self.status);
                     }
                 }
 
                 if self.length as usize > T {
                     self.status = Status::InvalidDataLengthDetected;
-                    return self.status;
+                    return Err(self.status);
                 }
             }
             i if (FLEM_HEADER_SIZE as u32 <= i && i < FLEM_HEADER_SIZE as u32 + T as u32) => {
@@ -528,29 +465,29 @@ impl<const T: usize> Packet<T> {
                     self.data[self.data_length_counter] = byte;
                 } else {
                     self.status = Status::PacketOverflow;
-                    return self.status;
+                    return Err(self.status);
                 }
                 self.data_length_counter += 1;
                 if self.length as usize == self.data_length_counter {
                     if self.validate() {
                         self.status = Status::PacketReceived;
-                        return self.status;
+                        return Ok(());
                     } else {
                         self.status = Status::ChecksumError;
-                        return self.status;
+                        return Err(self.status);
                     }
                 }
             }
             _ => {
                 self.status = Status::PacketOverflow;
-                return self.status;
+                return Err(self.status);
             }
         }
 
         self.internal_counter += 1;
         self.status = Status::PacketBuilding;
 
-        self.status
+        Err(self.status)
     }
 
     /// This function treats the entire packet as a byte array and uses internal
@@ -602,12 +539,12 @@ impl<const T: usize> Packet<T> {
     ///        }else{
     ///            // Queue is full, Tx the data, Rx on the other end
     ///            while !tx_fifo_queue.is_empty() {
-    ///                match rx.add_byte(tx_fifo_queue.dequeue().unwrap()) {
-    ///                    flem::Status::PacketReceived => {
+    ///                match rx.construct(tx_fifo_queue.dequeue().unwrap()) {
+    ///                    Ok(_) => {
     ///                        packet_received = true;
     ///                        keep_sending = false;
     ///                    },
-    ///                    _ => {
+    ///                    Err(status) => {
     ///                        /* Catch other statuses here on the Rx side */
     ///                    }
     ///                }
