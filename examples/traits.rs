@@ -7,11 +7,9 @@ use flem::*;
 // So a size of 108 would leave 100 bytes for data
 const FLEM_PACKET_SIZE: usize = 100;
 
-// Implement our own custom Request commands
-struct FlemRequestProjectX;
-
-impl FlemRequestProjectX {
-    const GET_DIAGNOSTICS: u8 = 10;
+#[repr(u16)]
+enum FlemRequestProjectX {
+    GetDiagnostics = 0x000A,
 }
 
 /// Task times in milliseconds
@@ -73,7 +71,7 @@ fn main() {
     let client_diagnostics = Diagnostics::new();
 
     host_tx.reset_lazy();
-    host_tx.set_request(FlemRequestProjectX::GET_DIAGNOSTICS);
+    host_tx.set_request(FlemRequestProjectX::GetDiagnostics as u16);
     host_tx.pack();
 
     // Transmit request
@@ -93,7 +91,7 @@ fn main() {
 
     client_tx.reset_lazy();
     client_tx.set_request(client_rx.get_request());
-    client_tx.set_response(Status::Ok as u8);
+    client_tx.set_response(Status::Ok as u16);
     client_diagnostics.encode(&mut client_tx).unwrap();
     client_tx.pack();
 

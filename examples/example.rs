@@ -7,11 +7,12 @@ use std::iter::FromIterator;
 // So a size of 108 would leave 100 bytes for data
 const FLEM_PACKET_SIZE: usize = 100;
 
-// Implement our own custom Request commands
-struct FlemRequestProjectX;
+pub mod host_requests {
+    pub const GET_DATA: u16 = 10;
+}
 
-impl FlemRequestProjectX {
-    const GET_DATA: u8 = 10;
+pub mod client_requests {
+    // If the client is to make requests, this is a good place to define them
 }
 
 fn main() {
@@ -32,7 +33,7 @@ fn main() {
     println!("Packet length: {}", client_rx.length());
 
     host_tx.reset();
-    host_tx.set_request(flem::Request::ID); // Change this for different responses from the client
+    host_tx.set_request(flem::request::ID); // Change this for different responses from the client
     host_tx.pack(); // Pack runs checksum and after that it is ready to send
 
     // Simulates byte-by-byte tranmission
@@ -66,13 +67,10 @@ fn main() {
     /* Process request on the client side */
     client_tx.reset_lazy();
     match client_rx.get_request() {
-        Request::EVENT => {
-            // Clients typically send events, but maybe not in your case!
-        }
-        Request::ID => {
+        request::ID => {
             client_tx.pack_id(&client_flem_id, true).unwrap();
         }
-        FlemRequestProjectX::GET_DATA => {
+        host_requests::GET_DATA => {
             // Custom command implemented for this project (Project X)
             let project_x_data = [0 as u8; 40];
             client_tx
@@ -86,7 +84,7 @@ fn main() {
             client_tx
                 .pack_error(
                     client_rx.get_request(),
-                    flem::Response::UnknownRequest as u8,
+                    flem::response::UNKNOWN_REQUEST,
                     &[],
                 )
                 .unwrap_or_else(|error| {
@@ -105,10 +103,7 @@ fn main() {
             Ok(_) => {
                 // Determine what to do with the received packet
                 match host_rx.get_request() {
-                    Request::EVENT => {
-                        // Hosts typically consume events, but maybe not in your case!
-                    }
-                    Request::ID => {
+                    request::ID => {
                         let host_size_data_id = flem::DataId::from(&host_rx.get_data()).unwrap();
                         println!(
                             "DataId Message: {}, max packet size: {}, Major: {}, Minor: {}, Patch: {}", 
@@ -119,7 +114,7 @@ fn main() {
                             host_size_data_id.get_patch()
                         );
                     }
-                    FlemRequestProjectX::GET_DATA => {
+                    host_requests::GET_DATA => {
                         // Custom command implemented for this project (Project X)
                         // Do something with the requested data
                     }

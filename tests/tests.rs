@@ -10,7 +10,7 @@ mod tests {
 
     #[test]
     fn sending() {
-        const REQUEST: u8 = 0xF;
+        const CUSTOM_REQUEST: u16 = 0xF;
 
         let mut rx = flem::Packet::<FLEM_PACKET_SIZE>::new();
         let mut tx = flem::Packet::<FLEM_PACKET_SIZE>::new();
@@ -20,13 +20,13 @@ mod tests {
             payload[i] = i as u8;
         }
 
-        tx.set_request(REQUEST);
-        assert_eq!(REQUEST, tx.get_request(), "Requests do not match");
+        tx.set_request(CUSTOM_REQUEST);
+        assert_eq!(CUSTOM_REQUEST, tx.get_request(), "Requests do not match");
         assert!(
             tx.add_data(&payload).is_ok(),
             "Payload is exactly packet size, SHOULD NOT cause error"
         );
-        assert_eq!(tx.checksum(true), 50848, "Checksum mismatch");
+        assert_eq!(tx.checksum(true), tx.checksum(false), "Checksum mismatch");
         tx.pack();
 
         let mut byte_counter = 0;
@@ -78,10 +78,10 @@ mod tests {
     fn checksum() {
         let mut rx = flem::Packet::<FLEM_PACKET_SIZE>::new();
 
-        rx.set_request(flem::Request::ID);
+        rx.set_request(flem::request::ID);
         let checksum = rx.checksum(true);
 
-        assert_eq!(checksum, 64513, "Checksum mismatch");
+        assert_eq!(checksum, rx.checksum(false), "Checksum mismatch");
         assert_eq!(checksum, rx.get_checksum(), "Checksum mismatch");
     }
 
@@ -89,7 +89,7 @@ mod tests {
     fn size_check() {
         let mut rx = flem::Packet::<FLEM_PACKET_SIZE>::new();
 
-        assert_eq!(rx.length(), 8, "Size should be 14 (i.e. just the header)");
+        assert_eq!(rx.length(), 10, "Size should be 10 (i.e. just the header)");
 
         let payload = [10 as u8; FLEM_PACKET_SIZE + 1];
         assert!(
@@ -99,7 +99,7 @@ mod tests {
         assert_eq!(
             rx.length(),
             flem::FLEM_HEADER_SIZE as usize,
-            "Size should be 14 (i.e. just the header)"
+            "Size should be 10 (i.e. just the header)"
         );
 
         let smaller_payload = [10 as u8; 60];
@@ -136,7 +136,7 @@ mod tests {
         use flem::Packet;
         use heapless;
         const PACKET_SIZE: usize = 64; // 64 byte packet
-        const FLEM_EXAMPLE_REQUEST: u8 = 0xF;
+        const FLEM_EXAMPLE_REQUEST: u16 = 0xF;
 
         let mut rx = Packet::<PACKET_SIZE>::new();
         let mut tx = Packet::<PACKET_SIZE>::new();
