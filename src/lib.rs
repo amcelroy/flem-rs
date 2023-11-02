@@ -143,7 +143,7 @@ pub struct Packet<const T: usize> {
 }
 
 pub mod response {
-    pub const ASYNCH: u16 = 0x0000;
+    pub const ASYNC: u16 = 0x0000;
     pub const SUCCESS: u16 = 0x0001;
     pub const UNKNOWN_REQUEST: u16 = 0xFFFC;
     pub const CHECKSUM_ERROR: u16 = 0xFFFD;
