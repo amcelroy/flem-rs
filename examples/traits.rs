@@ -7,9 +7,8 @@ use flem::*;
 // So a size of 108 would leave 100 bytes for data
 const FLEM_PACKET_SIZE: usize = 100;
 
-#[repr(u16)]
-enum FlemRequestProjectX {
-    GetDiagnostics = 0x000A,
+pub mod request_projectx {
+    pub const GET_DIAGNOSTICS: u16 = 10;
 }
 
 /// Task times in milliseconds
@@ -68,20 +67,23 @@ fn main() {
 
     let mut client_rx = flem::Packet::<FLEM_PACKET_SIZE>::new();
     let mut client_tx = flem::Packet::<FLEM_PACKET_SIZE>::new();
+
+    // Default values of - task_1: 100, task_2: 10, task_3: 25
     let client_diagnostics = Diagnostics::new();
 
     host_tx.reset_lazy();
-    host_tx.set_request(FlemRequestProjectX::GetDiagnostics as u16);
+    host_tx.set_request(request_projectx::GET_DIAGNOSTICS);
     host_tx.pack();
 
     // Transmit request
     for byte in host_tx.bytes() {
         match client_rx.construct(*byte) {
             Ok(_) => {
-                print!("Packet received on client");
+                println!("Packet received on client");
             }
             // More error checking here, if needed
             Err(status) => {
+                // We expect Status::PacketBuilding
                 if status != Status::PacketBuilding {
                     assert!(true, "An error shouldn't have occurred in this example");
                 }
@@ -91,44 +93,58 @@ fn main() {
 
     client_tx.reset_lazy();
     client_tx.set_request(client_rx.get_request());
-    client_tx.set_response(Status::Ok as u16);
+    client_tx.set_response(flem::response::SUCCESS);
+    // Encodes the struct into the packet
     client_diagnostics.encode(&mut client_tx).unwrap();
+    // Compute and store the checksum
     client_tx.pack();
 
     for byte in client_tx.bytes() {
         match host_rx.construct(*byte) {
             Ok(_) => {
-                print!("Packet received on host");
+                println!("Packet received on host");
             }
-            Err(_) => {
-                assert!(true, "An error shouldn't have occurred in this example");
+            Err(result) => {
+                // We expect Status::PacketBuilding
+                if result != Status::PacketBuilding {
+                    assert!(true, "An error shouldn't have occurred in this example");
+                }
             }
         }
     }
 
+    // Create a new struct to hold the decoded data
     let mut host_diagnostics = Diagnostics {
         task_1: 0,
         task_2: 0,
         task_3: 0,
     };
 
-    host_diagnostics.decode(&mut host_rx).unwrap();
+    // Decode the packet into the struct
+    host_diagnostics.decode(&host_rx).unwrap();
 
-    assert_ne!(
+    assert_eq!(
         client_diagnostics.task_1, host_diagnostics.task_1,
         "Task 1 not the same"
     );
-    assert_ne!(
+    assert_eq!(
         client_diagnostics.task_2, host_diagnostics.task_2,
         "Task 2 not the same"
     );
-    assert_ne!(
+    assert_eq!(
         client_diagnostics.task_3, host_diagnostics.task_3,
         "Task 3 not the same"
     );
 
-    print!(
-        "Task 1: {}, Task 2: {}, Task 3: {}",
+    println!(
+        "Client: Task 1: {}, Task 2: {}, Task 3: {}",
+        client_diagnostics.task_1, client_diagnostics.task_2, client_diagnostics.task_3
+    );
+
+    println!(
+        "Host: Task 1: {}, Task 2: {}, Task 3: {}",
         host_diagnostics.task_1, host_diagnostics.task_2, host_diagnostics.task_3
     );
+
+    println!("Transmission successful!");
 }

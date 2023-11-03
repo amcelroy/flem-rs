@@ -18,7 +18,7 @@ bench = false
 path = "src/lib.rs"
 
 [[example]]
-name = "core"
+name = "flem"
 path = "examples/example.rs"
 
 [[example]]

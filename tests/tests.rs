@@ -182,7 +182,7 @@ mod tests {
 
         assert!(packet_received, "Packet should have been transferred");
 
-        // This test is redundant, since the checkums passed, still nice to see
+        // This test is redundant, since the checksums passed, still nice to see
 
         let rx_bytes = rx.bytes();
         let tx_bytes = tx.bytes();

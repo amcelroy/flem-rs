@@ -145,9 +145,8 @@ pub struct Packet<const T: usize> {
 pub mod response {
     pub const ASYNC: u16 = 0x0000;
     pub const SUCCESS: u16 = 0x0001;
-    pub const UNKNOWN_REQUEST: u16 = 0xFFFC;
-    pub const CHECKSUM_ERROR: u16 = 0xFFFD;
-    pub const ERROR: u16 = 0xFFFE;
+    pub const UNKNOWN_REQUEST: u16 = 0xFFFE;
+    pub const CHECKSUM_ERROR: u16 = 0xFFFF;
 }
 
 /// Pre-defined requests
@@ -207,7 +206,7 @@ impl<const T: usize> Packet<T> {
         };
     }
 
-    /// Convenience function to response with data. The response byte is automatically set to Response::Success.
+    /// Convenience function to response with data. The response byte is automatically set to SUCCESS.
     pub fn pack_data(&mut self, request: u16, data: &[u8]) -> Result<(), Status> {
         self.reset_lazy();
         self.request = request;
@@ -229,19 +228,6 @@ impl<const T: usize> Packet<T> {
         match self.add_data(data) {
             Ok(_) => {
                 self.response = error;
-                self.pack();
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    pub fn pack_event(&mut self, request_of_host: u16, data: &[u8]) -> Result<(), Status> {
-        self.reset_lazy();
-        self.request = request_of_host;
-        self.response = 0;
-        match self.add_data(data) {
-            Ok(_) => {
                 self.pack();
                 Ok(())
             }
@@ -348,7 +334,7 @@ impl<const T: usize> Packet<T> {
         return crc == self.checksum;
     }
 
-    /// Contruct a packet one byte at a time. An internal counter keeps track of where the byte should go.
+    /// Construct a packet one byte at a time. An internal counter keeps track of where the byte should go.
     /// The current return value is the Status and should be one of the following:
     /// - HeaderBytesNotFound - The packet header was not found
     /// - ChecksumError - The computed checksum does not match the sent checksum
@@ -497,7 +483,7 @@ impl<const T: usize> Packet<T> {
     /// error occurs or status is Status::GetByteFinished.
     ///
     /// It is often easier to use .bytes(), but this function is meant to be used
-    /// in an async nature, for example an interrupt drivern UART transmit FIFO.
+    /// in an async nature, for example an interrupt driven UART transmit FIFO.
     ///
     /// The return value is a Result composed of the byte requested if everything is going
     /// well, or a Status as an Error indicating all bytes have been gotten.
@@ -556,7 +542,7 @@ impl<const T: usize> Packet<T> {
     ///
     ///    assert!(packet_received, "Packet should have been transferred");
     ///
-    ///    // This test is redundant, since the checkums passed, still nice to see
+    ///    // This test is redundant, since the checksums passed, still nice to see
     ///
     ///    let rx_bytes = rx.bytes();
     ///    let tx_bytes = tx.bytes();

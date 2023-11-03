@@ -96,9 +96,9 @@ fn main() {
 
     /* Send response back to host */
     for byte in client_tx.bytes() {
-        // ** Byte is trasmitting over hardware **
+        // ** Byte is transmitting over hardware **
 
-        // ** Byte recevied by host, construct the
+        // ** Byte received by host, construct the
         match host_rx.construct(*byte) {
             Ok(_) => {
                 // Determine what to do with the received packet
