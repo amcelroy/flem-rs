@@ -1,6 +1,6 @@
 [package]
 name = "flem"
-version = "0.5.1"
+version = "0.6.0"
 edition = "2021"
 description = "Flexible, Light-weight, Embedded Messaging Protocol"
 repository = "https://github.com/BridgeSource/flem-rs.git"
@@ -18,7 +18,7 @@ bench = false
 path = "src/lib.rs"
 
 [[example]]
-name = "core"
+name = "flem"
 path = "examples/example.rs"
 
 [[example]]

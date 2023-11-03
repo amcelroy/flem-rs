@@ -1,24 +1,32 @@
 ![Flem Build and Tests](https://github.com/amcelroy/flem-rust/actions/workflows/rust.yml/badge.svg)
 
-# FLEM Rust
+# FLEM Rust 0.6.0
 
 FLEM stands for Flexible, Light-weight, Embedded Messaging and is a Little 
 Endian messaging protocol intended for use in communicating with embedded 
-systems targets over numerous types of busses. The host makes requests to the 
-client (typically the embedded target). The client processes the requests and 
-responds. The client can asynchronously send an Event packet that the host can 
-deal with as needed. Together, a host and a client make a partner.
+systems targets over numerous types of buses. 
+
+## Changelog 
+### Changelog 0.6.0 (from 0.5.0)
+- Requests are now 2 byte u16 instead of 1 byte u8
+- Responses are now 2 byte u16 instead of 1 byte u8
+- Events are no longer a concept. Instead, each device should check incoming packets 
+for requests and handle those as normal. This should simplify code and prevent
+accidentally mixing requests / responses / events.
+- Built in responses have changed: Busy was removed, and SUCCESS was moved from 0x00 to 0x0001. ASYNC is now 0x0000 and represents a packet being sent without asking and is the default option upon a packet reset
+or instantiation.
+- Updated unit tests and examples
 
 ## Concepts
 
 At its core, FLEM has packets composed of a header, and a data payload. The 
-header is 8 bytes and consists of:
+header is 10 bytes and consists of:
 - Header - 2 bytes - Should always be a value of 0x5555
-- Checksum - 2 bytes - CRC-16 (IBM) of the packet (exludes the header and 
+- Checksum - 2 bytes - CRC-16 (IBM) of the packet (excludes the header and 
 checksum bytes)
-- Request - 1 byte - A value from 0 to 255 that indicates what the client 
+- Request - 2 byte - A value from 0 to 65535 that indicates what the client 
 should do. There are some reserved values, see below.
-- Response - 1 byte - A value of 0 to 255 that indicates additional information
+- Response - 2 byte - A value of 0 to 65535 that indicates additional information
  about the client.
 - Length - 2 bytes - Number of bytes being transmitted in the `data` buffer. 
 Can be 0 to u16::MAX.
@@ -48,8 +56,6 @@ add data, set the header bytes, and perform the pack operation:
 Request byte set by the user.
 - `pack_error` - Adds data to a packet with Request and Response bytes specified 
 by the user. If no data needs to be transmitted, use an empty data array `&[]`.
-- `pack_event` - Adds data to a packet with the Request byte set as an `EVENT`
-and the Response byte set to a user defined value.
 
 __Note__: If no data is to be transmitted, set data to an empty data array 
 `&[]`.
@@ -66,58 +72,68 @@ header or the checksum bytes; ensure they are either zero or skipped if
 implemented in another language.
 
 ## Request
-Typically, a host sends a 1-byte request to a client. A request doesn't need to 
-have any data payload to it, in which case a simple request packet is 8 bytes. 
+Typically, a host sends a 2-byte request to a client. A request doesn't need to 
+have any data payload, in which case a simple request packet is 10 bytes. 
 A response packet should always echo the request to ensure the partner device 
 can double check and route the response correctly. 
 
 __Note__, the client is not required to respond. The client responses help 
-ensure commands were sent, processed, successful (or not) and may help validate
-that the hardware tranmission of data is performing as intended.
+ensure commands were sent and processed successful (or not). It will also help validate
+that the hardware transmission of data is performing as intended via the checksum.
 
-Requests are mostly left up to the user to implement, though there are some 
-pre-defined ones.
+Requests are mostly left up to the user to implement, though there is one 
+pre-defined:
 
-- Event (0x00) - A request of 0 indicates the partner is sending out data without 
-a request being sent first. If this is the case, the Response Byte will contain 
-the u8 command of the event, which should be pre-determined between host and 
-client.
 - Id (0x01) - Each device using FLEM should implement a `DataId` struct that 
 indicates a version, serial number, name, or some other information (30 bytes, 
 char) and a u16 indicating the partners max packet size.  This requires that 
-the client / host use packet sizes of at least 32 bytes. Smaller Ids can be 
+the client / host use packet sizes of at least 30 bytes. Smaller Ids can be 
 used, or not responded to, but it is up to the user to implement.
 
-Our company has a seperate project that has all of the responses, requests, and
-events for each project in a different Rust sub-module. This way, our 
-communication protocols are all in one spot and revision controlled for use in
-future projects.
+Our company has a separate project that has all of the responses and requests
+for each project in a different Rust sub-module. Typically, each project has
+something like:
+```
+pub mod host_requests {
+    pub const READ_CONFIG: u16 = ...;
+    pub const WRITE_CONFIG: u16 = ...;
+}
+
+pub mod client_requests {
+    pub const INTERRUPT: u16 = ...;
+    pub const DATA_ACQUIRED: u16 = ...;
+}
+```
 
 ## Response
-Responses are 1-byte codes that indicate the status of the client.
+Responses are 2-byte codes that indicate the status of the partner device, if needed.  
 
 #### Response byte if the Request is an Event: 
 There are some reserved non-event responses:
-- Success - 0x00 - Nothing went wrong
-- Busy - 0x01 - Indicates the the partner is busy
-- PacketOverflow - 0xFC - Too much data was sent to the partner and it exceeded
-the packet buffer.
-- UnknownRequest - 0xFD - The request wasn't recognized by the partner
-- ChecksumError - 0xFE - Checksum did not compute correctly
-- Error - 0xFF - Unspecified error when processing a request
-
-#### Response byte if the Request is an Event:
-If the partner is sending an event, the Response byte represents a command that 
-the partner would like to execute or convery to the host. As with Requests, the
-Response byte code in the case of an event should be pre-determined between the
-host and the client.
+- ASYNC - 0x0000 - The packet is being sent without asking
+- SUCCESS - 0x0001 - Nothing went wrong processing the request, the request is likewise echoed in the response packet.
+- UNKNOWN_REQUEST - 0xFFFD - The request wasn't recognized by the partner
+- CHECKSUM_ERROR - 0xFFFF - Checksum did not compute correctly
 
 ## Length
-Two bytes inidcating the amount of data to expect in the packets data field. 
+Two bytes indicating the amount of data to expect in the packets data field. 
 This can be 0 to u16::MAX, though typically it would be something smaller. 
 
 ## Data
 The packet data payload. Can be 0 to u16::MAX bytes. 
+
+## Traits
+
+FLEM offers a `DataInterface` trait that can be implemented on a struct that 
+allow the user to encode and decode the struct into a FLEM packet. In general,
+check that the struct can fit in the packet when encoding, and that the packet 
+has enough data to fit into the struct when decoding. 
+
+Once this check is done, the data can be moved into or out of the struct, making
+sure that the encoding and decoding order is consistent. See `examples/traits.rs`
+for an example. There are convenience functions in `src/buffer.rs` that can be 
+used when decoding, with unit tests for these functions in `tests/tests.rs`.
+
 
 ## Examples
 

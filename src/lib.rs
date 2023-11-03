@@ -3,8 +3,6 @@
 pub mod buffer;
 pub mod traits;
 
-pub struct Request;
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Status {
     Ok,
@@ -135,8 +133,8 @@ impl DataId {
 pub struct Packet<const T: usize> {
     header: u16,
     checksum: u16,
-    request: u8,
-    response: u8,
+    request: u16,
+    response: u16,
     length: u16,
     data: [u8; T],
     internal_counter: u32,
@@ -144,22 +142,19 @@ pub struct Packet<const T: usize> {
     status: Status,
 }
 
-pub enum Response {
-    Success = 0x00,
-    Busy = 0x01,
-    PacketOverflow = 0xFC,
-    UnknownRequest = 0xFD,
-    ChecksumError = 0xFE,
-    Error = 0xFF,
+pub mod response {
+    pub const ASYNC: u16 = 0x0000;
+    pub const SUCCESS: u16 = 0x0001;
+    pub const UNKNOWN_REQUEST: u16 = 0xFFFE;
+    pub const CHECKSUM_ERROR: u16 = 0xFFFF;
 }
 
-/// Pre-defined requests. It is easier to extend u8 values rather than an enum
-impl Request {
-    pub const EVENT: u8 = 0;
-    pub const ID: u8 = 1;
+/// Pre-defined requests
+pub mod request {
+    pub const ID: u16 = 0x0001;
 }
 
-pub const FLEM_HEADER_SIZE: usize = 8;
+pub const FLEM_HEADER_SIZE: usize = 10;
 pub const FLEM_HEADER: u16 = 0x5555;
 const CRC16_TAB: [u16; 256] = [
     0x0000, 0xc0c1, 0xc181, 0x0140, 0xc301, 0x03c0, 0x0280, 0xc241, 0xc601, 0x06c0, 0x0780, 0xc741,
@@ -211,13 +206,13 @@ impl<const T: usize> Packet<T> {
         };
     }
 
-    /// Convenience function to response with data. The response byte is automatically set to Response::Success.
-    pub fn pack_data(&mut self, request: u8, data: &[u8]) -> Result<(), Status> {
+    /// Convenience function to response with data. The response byte is automatically set to SUCCESS.
+    pub fn pack_data(&mut self, request: u16, data: &[u8]) -> Result<(), Status> {
         self.reset_lazy();
         self.request = request;
         match self.add_data(data) {
             Ok(_) => {
-                self.response = Response::Success as u8;
+                self.response = response::SUCCESS;
                 self.pack();
                 Ok(())
             }
@@ -226,26 +221,13 @@ impl<const T: usize> Packet<T> {
     }
 
     /// Convenience function to respond quickly if an error occurs (without data).
-    pub fn pack_error(&mut self, request: u8, error: u8, data: &[u8]) -> Result<(), Status> {
+    pub fn pack_error(&mut self, request: u16, error: u16, data: &[u8]) -> Result<(), Status> {
         self.reset_lazy();
         self.request = request;
         self.response = error;
         match self.add_data(data) {
             Ok(_) => {
                 self.response = error;
-                self.pack();
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    pub fn pack_event(&mut self, request_of_host: u8, data: &[u8]) -> Result<(), Status> {
-        self.reset_lazy();
-        self.request = Request::EVENT;
-        self.response = request_of_host;
-        match self.add_data(data) {
-            Ok(_) => {
                 self.pack();
                 Ok(())
             }
@@ -261,8 +243,8 @@ impl<const T: usize> Packet<T> {
     /// * `ascii` - Packages the ID as a UTF-8 ID. Used when talking to C/C++ partners.
     pub fn pack_id(&mut self, id: &DataId, ascii: bool) -> Result<(), Status> {
         self.reset_lazy();
-        self.request = Request::ID as u8;
-        self.response = Response::Success as u8;
+        self.request = request::ID;
+        self.response = response::SUCCESS;
 
         if ascii {
             self.add_data(&[id.get_major(); 1])?;
@@ -297,7 +279,7 @@ impl<const T: usize> Packet<T> {
     ///
     ///     const PACKET_SIZE: usize = 64; // 64 byte packet
     ///
-    ///     const FLEM_EXAMPLE_REQUEST: u8 = 0xF;
+    ///     const FLEM_EXAMPLE_REQUEST: u16 = 0xF;
     ///
     ///     let mut rx = Packet::<PACKET_SIZE>::new();
     ///
@@ -352,7 +334,7 @@ impl<const T: usize> Packet<T> {
         return crc == self.checksum;
     }
 
-    /// Contruct a packet one byte at a time. An internal counter keeps track of where the byte should go.
+    /// Construct a packet one byte at a time. An internal counter keeps track of where the byte should go.
     /// The current return value is the Status and should be one of the following:
     /// - HeaderBytesNotFound - The packet header was not found
     /// - ChecksumError - The computed checksum does not match the sent checksum
@@ -371,7 +353,7 @@ impl<const T: usize> Packet<T> {
     ///
     ///     const PACKET_SIZE: usize = 64; // 64 byte packet
     ///
-    ///     const FLEM_EXAMPLE_REQUEST: u8 = 0xF;
+    ///     const FLEM_EXAMPLE_REQUEST: u16 = 0xF;
     ///
     ///     let mut rx = Packet::<PACKET_SIZE>::new();
     ///     let mut tx = Packet::<PACKET_SIZE>::new();
@@ -434,15 +416,21 @@ impl<const T: usize> Packet<T> {
                 self.checksum |= (byte as u16) << 8;
             }
             4 => {
-                self.request = byte;
+                self.request = byte as u16;
             }
             5 => {
-                self.response = byte;
+                self.request |= (byte as u16) << 8;
             }
             6 => {
-                self.length = byte as u16;
+                self.response = byte as u16;
             }
             7 => {
+                self.response |= (byte as u16) << 8;
+            }
+            8 => {
+                self.length = byte as u16;
+            }
+            9 => {
                 self.length |= (byte as u16) << 8;
                 self.data_length_counter = 0;
                 if self.length == 0 {
@@ -495,7 +483,7 @@ impl<const T: usize> Packet<T> {
     /// error occurs or status is Status::GetByteFinished.
     ///
     /// It is often easier to use .bytes(), but this function is meant to be used
-    /// in an async nature, for example an interrupt drivern UART transmit FIFO.
+    /// in an async nature, for example an interrupt driven UART transmit FIFO.
     ///
     /// The return value is a Result composed of the byte requested if everything is going
     /// well, or a Status as an Error indicating all bytes have been gotten.
@@ -506,7 +494,7 @@ impl<const T: usize> Packet<T> {
     ///    use flem::{Packet};
     ///    use heapless;
     ///    const PACKET_SIZE: usize = 64; // 64 byte packet
-    ///    const FLEM_EXAMPLE_REQUEST: u8 = 0xF;
+    ///    const FLEM_EXAMPLE_REQUEST: u16 = 0xF;
     ///    
     ///    let mut rx = Packet::<PACKET_SIZE>::new();
     ///    let mut tx = Packet::<PACKET_SIZE>::new();
@@ -554,7 +542,7 @@ impl<const T: usize> Packet<T> {
     ///
     ///    assert!(packet_received, "Packet should have been transferred");
     ///
-    ///    // This test is redundant, since the checkums passed, still nice to see
+    ///    // This test is redundant, since the checksums passed, still nice to see
     ///
     ///    let rx_bytes = rx.bytes();
     ///    let tx_bytes = tx.bytes();
@@ -582,12 +570,12 @@ impl<const T: usize> Packet<T> {
     }
 
     /// Sets the Flem request field
-    pub fn set_request(&mut self, request: u8) {
+    pub fn set_request(&mut self, request: u16) {
         self.request = request;
     }
 
     /// Gets the Flem request field
-    pub fn get_request(&self) -> u8 {
+    pub fn get_request(&self) -> u16 {
         self.request
     }
 
@@ -597,12 +585,12 @@ impl<const T: usize> Packet<T> {
     }
 
     /// Sets the Flem response field
-    pub fn set_response(&mut self, response: u8) {
+    pub fn set_response(&mut self, response: u16) {
         self.response = response;
     }
 
     /// Gets the Flem response field
-    pub fn get_response(&self) -> u8 {
+    pub fn get_response(&self) -> u16 {
         self.response
     }
 
