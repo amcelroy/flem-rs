@@ -7,6 +7,10 @@ Endian messaging protocol intended for use in communicating with embedded
 systems targets over numerous types of buses. 
 
 ## Changelog 
+
+### Changelog 0.6.1
+- Added fmt::Debug trait to Packet that prints the header, checksum, request, response, length, and status.
+
 ### Changelog 0.6.0 (from 0.5.0)
 - Requests are now 2 byte u16 instead of 1 byte u8
 - Responses are now 2 byte u16 instead of 1 byte u8

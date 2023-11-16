@@ -31,7 +31,7 @@ checksum = "6548a0ad5d2549e111e1f6a11a6c2e2d00ce6a3dafe22948d67c2b443f775e52"
 
 [[package]]
 name = "flem"
-version = "0.6.0"
+version = "0.6.1"
 dependencies = [
  "heapless",
 ]
