@@ -1,5 +1,7 @@
 #![no_std]
 
+use core::fmt::{Debug, Error, Formatter};
+
 pub mod buffer;
 pub mod traits;
 
@@ -692,5 +694,24 @@ impl<const T: usize> Packet<T> {
         let mut x: usize = FLEM_HEADER_SIZE as usize;
         x += self.length as usize;
         return x;
+    }
+}
+
+impl<const T: usize> Debug for Packet<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), Error> {
+        let header = self.header;
+        let checksum = self.checksum;
+        let request = self.request;
+        let response = self.response;
+        let length = self.length;
+
+        f.debug_struct("Packet")
+            .field("header", &header)
+            .field("checksum", &checksum)
+            .field("request", &request)
+            .field("response", &response)
+            .field("length", &length)
+            .field("status", &self.status)
+            .finish()
     }
 }
