@@ -1,12 +1,18 @@
 ![Flem Build and Tests](https://github.com/amcelroy/flem-rust/actions/workflows/rust.yml/badge.svg)
 
-# FLEM Rust 0.6.0
+# FLEM Rust 0.6.2
 
 FLEM stands for Flexible, Light-weight, Embedded Messaging and is a Little 
 Endian messaging protocol intended for use in communicating with embedded 
 systems targets over numerous types of buses. 
 
 ## Changelog 
+
+### Changelog 0.6.2
+- Added feature = ["std"]
+- Added `Channel` trait. This trait requires features = ["std"]. It servers as a set of traits that can be used
+to implement different hardware or to emulate a device. It uses the `std` library for threading and `mpsc` channels.
+- Added examples to show how to emulate a device use the `Channel` trait.
 
 ### Changelog 0.6.1
 - Added fmt::Debug trait to Packet that prints the header, checksum, request, response, length, and status.
