@@ -12,7 +12,7 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = ["std"]
+default = []
 std = []
 
 [lib]
@@ -26,8 +26,8 @@ name = "flem"
 path = "examples/example.rs"
 
 [[example]]
-name = "traits"
-path = "examples/traits.rs"
+name = "encode_decode"
+path = "examples/encode_decode.rs"
 
 [[example]]
 name = "software_host_simple"
