@@ -24,12 +24,12 @@ pub trait DataInterface<const T: usize>: Sized {
 }
 
 #[cfg(feature = "std")]
-pub trait Host<const T: usize>: Sized {
+pub trait Channel<const T: usize>: Sized {
     type Error;
 
     fn list_devices(&self) -> Vec<String>;
     fn connect(&mut self, device: &String) -> Result<(), Self::Error>;
     fn disconnect(&mut self) -> Result<(), Self::Error>;
-    fn listen(&mut self, rx_sleep_time_ms: u64, tx_sleep_time_ms: u64,) -> (Receiver<Packet<T>>, Sender<Packet<T>>);
+    fn listen(&mut self, rx_sleep_time_ms: u64, tx_sleep_time_ms: u64,) -> (Sender<Packet<T>>, Receiver<Packet<T>>);
     fn unlisten(&mut self) -> Result<(), Self::Error>;
 }

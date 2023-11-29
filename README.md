@@ -8,6 +8,10 @@ systems targets over numerous types of buses.
 
 ## Changelog 
 
+### Changelog 0.6.2
+- Added feature = ["std"]
+- Added `Channel` trait. This 
+
 ### Changelog 0.6.1
 - Added fmt::Debug trait to Packet that prints the header, checksum, request, response, length, and status.
 
