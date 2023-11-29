@@ -11,6 +11,10 @@ license = "MIT"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["std"]
+std = []
+
 [lib]
 name = "flem"
 crate-type = ["lib"]
@@ -24,6 +28,10 @@ path = "examples/example.rs"
 [[example]]
 name = "traits"
 path = "examples/traits.rs"
+
+[[example]]
+name = "software_host"
+path = "examples/software_host.rs"
 
 [dev-dependencies]
 heapless = "0.7"
