@@ -10,7 +10,7 @@ systems targets over numerous types of buses.
 
 ### Changelog 0.6.2
 - Added feature = ["std"]
-- Added `Channel` trait. This trait requires features = ["std"]. It servers as a set of traits that can be used
+- Added `Channel` trait. This trait requires features = ["std"]. It serves as a set of traits that can be used
 to implement different hardware or to emulate a device. It uses the `std` library for threading and `mpsc` channels.
 - Added examples to show how to emulate a device use the `Channel` trait.
 
